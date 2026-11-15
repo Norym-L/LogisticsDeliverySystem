@@ -1,0 +1,33 @@
+package norym.logisticsdeliverysystem.service;
+
+import norym.logisticsdeliverysystem.dto.CreatedOrderView;
+import norym.logisticsdeliverysystem.dto.OrderBriefView;
+import norym.logisticsdeliverysystem.dto.OrderDetailView;
+import norym.logisticsdeliverysystem.dto.OrderFormRequest;
+import norym.logisticsdeliverysystem.dto.OrderStatusView;
+
+import java.util.List;
+
+public interface OrderService
+{
+    /** 发起订单，返回邮件编号 */
+    CreatedOrderView create(OrderFormRequest request);
+
+    /** 用手机号查所有相关单号（寄件人与收件人都匹配） */
+    List<OrderBriefView> listByPhone(String phone);
+
+    /** 用单号查详情 */
+    OrderDetailView detail(String orderNo);
+
+    /** 查询是否通过审批（前端轮询用） */
+    OrderStatusView status(String orderNo);
+
+    /** 收件人签收 */
+    void sign(String orderNo, String receiverPhone);
+
+    /** 收件人拒收，货按原路退回 */
+    void refuse(String orderNo, String receiverPhone, String reason);
+
+    /** 被拒后修改信息重提 */
+    void resubmit(String orderNo, OrderFormRequest request);
+}

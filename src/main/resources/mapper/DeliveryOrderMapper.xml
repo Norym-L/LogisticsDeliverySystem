@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="norym.logisticsdeliverysystem.mapper.DeliveryOrderMapper">
+
+    <insert id="insert" parameterType="DeliveryOrder" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO delivery_order (order_no, sender_name, sender_phone, receiver_name, receiver_phone,
+                                    from_station_id, to_station_id, goods_desc, weight,
+                                    state, approve_deadline)
+        VALUES (#{orderNo}, #{senderName}, #{senderPhone}, #{receiverName}, #{receiverPhone},
+                #{fromStationId}, #{toStationId}, #{goodsDesc}, #{weight},
+                #{state}, #{approveDeadline})
+    </insert>
+
+    <select id="findByOrderNo" resultType="DeliveryOrder">
+        SELECT *
+        FROM delivery_order
+        WHERE order_no = #{orderNo}
+    </select>
+
+    <select id="findByPhone" resultType="DeliveryOrder">
+        SELECT *
+        FROM delivery_order
+        WHERE sender_phone = #{phone}
+           OR receiver_phone = #{phone}
+        ORDER BY id DESC
+    </select>
+
+    <!-- 签收：手机号 + 状态一起卡在 WHERE，影响 0 行即校验失败，不需要先查后改 -->
+    <update id="sign">
+        UPDATE delivery_order
+        SET state        = 'RECEIVED',
+            receive_time = #{now},
+            version      = version + 1
+        WHERE order_no = #{orderNo}
+          AND receiver_phone = #{receiverPhone}
+          AND state = 'DELIVERING'
+    </update>
+
+    <!-- 拒收：状态转 RETURNING，回程路线由 service 在同一事务里追加 -->
+    <update id="refuse">
+        UPDATE delivery_order
+        SET state         = 'RETURNING',
+            refuse_reason = #{reason},
+            refuse_time   = #{now},
+            version       = version + 1
+        WHERE order_no = #{orderNo}
+          AND receiver_phone = #{receiverPhone}
+          AND state = 'DELIVERING'
+    </update>
+
+    <!--
+      重提：只接受 REJECTED 且未超上限。
+      current_seq / current_station_id 要清空，因为上一轮审批没通过，路线还没生成。
+    -->
+    <update id="resubmit">
+        UPDATE delivery_order
+        SET sender_name        = #{order.senderName},
+            sender_phone       = #{order.senderPhone},
+            receiver_name      = #{order.receiverName},
+            receiver_phone     = #{order.receiverPhone},
+            from_station_id    = #{order.fromStationId},
+            to_station_id      = #{order.toStationId},
+            goods_desc         = #{order.goodsDesc},
+            weight             = #{order.weight},
+            state              = 'WAITING',
+            reject_reason      = NULL,
+            current_seq        = NULL,
+            current_station_id = NULL,
+            approve_deadline   = #{deadline},
+            resubmit_count     = resubmit_count + 1,
+            version            = version + 1
+        WHERE order_no = #{order.orderNo}
+          AND state = 'REJECTED'
+          AND resubmit_count &lt; #{maxResubmit}
+    </update>
+
+    <!-- 审批超时：定时任务调用，条件更新保证重复执行也幂等 -->
+    <update id="rejectTimeout">
+        UPDATE delivery_order
+        SET state         = 'REJECTED',
+            reject_reason = '审批超时',
+            version       = version + 1
+        WHERE state = 'WAITING'
+          AND approve_deadline &lt; #{now}
+    </update>
+
+</mapper>

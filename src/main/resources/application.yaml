@@ -1,3 +1,33 @@
 spring:
   application:
     name: LogisticsDeliverySystem
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 注意端口是 3308：MySQL 跑在 WSL 的 Docker 容器里，映射到 Windows 本机
+    url: jdbc:mysql://127.0.0.1:3308/logistics?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: "123456"
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 3000
+  jackson:
+    default-property-inclusion: non_null
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: norym.logisticsdeliverysystem.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    default-enum-type-handler: org.apache.ibatis.type.EnumTypeHandler
+
+logistics:
+  # 审批超时时间。演示时改成 15，答辩现场能看到自动拒绝
+  approve-timeout-seconds: 60
+  # 超时扫描间隔
+  approve-scan-interval-ms: 5000
+  # 被拒后允许重提的最大次数
+  max-resubmit: 3
+
+logging:
+  level:
+    norym.logisticsdeliverysystem.mapper: debug
