@@ -137,15 +137,14 @@ CREATE TABLE postman
 --      REJECTED   已拒绝（管理员拒绝或审批超时）。不是终态：
 --                 用户可修改收寄信息后重提，状态回到 WAITING，
 --                 重提次数记在 resubmit_count，业务层据此设上限。
---      SENDING    运送中（去程）
---      DELIVERING 派送中（已到目的站并分配配送员）
+--      SENDING    运送中（含"已到目的站、等待快递员取件"）
+--      DELIVERING 派送中（快递员已取件，最后一公里）
 --      RECEIVED   已签收（终态）
---      RETURNING  退回中（收件人拒收，按原路返回始发站）
---      RETURNED   已退回（终态）
+--      REFUSED    已拒收（终态）
 --
---    没有 REFUSED 状态：拒收是"派送动作的结果"，业务后果是进入回程，
---    因此状态直接转为 RETURNING。拒收事实记在 refuse_reason / refuse_time
---    以及 order_route 末段的 status = 'REFUSED' 上。
+--    拒收不追加回程路线，而是生成一张**退回单**：方向相反的独立订单，
+--    走同一套审批与运输流程，原单以 REFUSED 终结。
+--    return_of 记录退回单指向的原单号，一个原单最多一张退回单。
 --
 --    current_seq / current_station_id 两字段必须同一事务更新：
 --    前者是唯一真相，后者是冗余快照，用于"本站待处理货物"这类高频查询。
@@ -177,6 +176,7 @@ CREATE TABLE delivery_order
     receive_time     DATETIME        NULL COMMENT '签收时间',
     forward_station_count INT        NULL COMMENT '去程站数；seq<=此值为去程，>为回程',
     resubmit_count   INT             NOT NULL DEFAULT 0 COMMENT '被拒后修改重提的次数，业务层限制上限',
+    return_of        VARCHAR(32)     NULL COMMENT '退回单记录的原单号，普通订单为空',
     version          INT             NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     create_time      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '下单时间',
     update_time      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -186,8 +186,9 @@ CREATE TABLE delivery_order
     KEY idx_receiver_phone (receiver_phone),
     KEY idx_state_deadline (state, approve_deadline),
     KEY idx_current_station (current_station_id, state),
+    KEY idx_return_of (return_of),
     CONSTRAINT ck_order_state CHECK (state IN ('WAITING', 'APPROVED', 'REJECTED', 'SENDING',
-                                               'DELIVERING', 'RECEIVED', 'RETURNING', 'RETURNED')),
+                                               'DELIVERING', 'RECEIVED', 'REFUSED')),
     CONSTRAINT fk_order_from FOREIGN KEY (from_station_id) REFERENCES station (id),
     CONSTRAINT fk_order_to FOREIGN KEY (to_station_id) REFERENCES station (id),
     CONSTRAINT fk_order_approve_by FOREIGN KEY (approve_by) REFERENCES operator (id)
@@ -207,7 +208,11 @@ CREATE TABLE delivery_order
 --      一张表同时承载去程与回程，current_seq 单调递增，
 --      "取下一节点" 永远是 seq = current_seq + 1，两段共用同一套代码。
 --
---    arrive_trip_no：抵达本站所乘车次，始发站为空。
+--    forward_station_count：去程站数（= 最后一行的 seq），用于判断是否已到达目的站。
+--    seq 只表示去程；拒收退回由独立退回单承载，不在这里追加回程行。
+--
+--    arrive_trip_no：该段承运车次。中转段由车次承运，不指派快递员；
+--                    postman_id 只在目的站那一行有值，表示最后一公里的快递员。
 --    postman_id    ：仅去程末段（seq = forward_station_count）使用。
 --    status        ：PENDING 未到 / ARRIVED 已到站 / DELIVERING 派送中 /
 --                    SIGNED 已签收 / REFUSED 已拒收
@@ -224,7 +229,7 @@ CREATE TABLE order_route
     depart_time        DATETIME        NULL COMMENT '从本站发出的时间',
     actual_arrive_time DATETIME        NULL COMMENT '实际到达时间',
     arrive_operator_id BIGINT UNSIGNED NULL COMMENT '确认到站的操作员',
-    postman_id         BIGINT UNSIGNED NULL COMMENT '去程末段的派送员',
+    postman_id         BIGINT UNSIGNED NULL COMMENT '最后一公里的快递员，仅目的站那一行有值',
     status             VARCHAR(16)     NOT NULL DEFAULT 'PENDING' COMMENT '路段状态',
     remark             VARCHAR(255)    NULL COMMENT '备注',
     PRIMARY KEY (id),

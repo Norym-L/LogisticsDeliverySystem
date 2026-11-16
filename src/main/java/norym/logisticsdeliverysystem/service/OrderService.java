@@ -26,8 +26,8 @@ public interface OrderService
     /** 收件人签收 */
     void sign(String orderNo, String receiverPhone);
 
-    /** 收件人拒收，货按原路退回 */
-    void refuse(String orderNo, String receiverPhone, String reason);
+    /** 收件人拒收：原单终结，同时生成一张走同样审批流程的退回单 */
+    CreatedOrderView refuse(String orderNo, String receiverPhone, String reason);
 
     /** 被拒后修改信息重提 */
     void resubmit(String orderNo, OrderFormRequest request);

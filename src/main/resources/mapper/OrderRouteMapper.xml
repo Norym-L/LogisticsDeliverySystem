@@ -31,13 +31,19 @@
           AND seq = #{seq}
     </select>
 
-    <update id="assign">
+    <update id="assignTrip">
         UPDATE order_route
-        SET postman_id     = #{postmanId},
-            arrive_trip_no = #{tripNo}
+        SET arrive_trip_no = #{tripNo}
         WHERE order_id = #{orderId}
           AND seq = #{seq}
           AND status = 'PENDING'
+    </update>
+
+    <update id="assignPostman">
+        UPDATE order_route
+        SET postman_id = #{postmanId}
+        WHERE order_id = #{orderId}
+          AND seq = #{seq}
     </update>
 
     <!-- 发运时间记在"出发站"那一行；该行此时可能已是 ARRIVED，不能再拿 PENDING 当条件，
@@ -62,5 +68,38 @@
     <delete id="deleteByOrderId">
         DELETE FROM order_route WHERE order_id = #{orderId}
     </delete>
+
+    <!--
+      快递员任务：起点站取上一行（seq-1）的驿站，seq=1 时回退到订单的始发站。
+      一次 join 拿全，不在 Java 里逐条补查。
+    -->
+    <select id="findTasks" resultType="norym.logisticsdeliverysystem.dto.PostmanTask">
+        SELECT o.order_no                 AS orderNo,
+               o.state                    AS orderState,
+               r.seq                      AS seq,
+               o.forward_station_count    AS forwardStationCount,
+               CASE WHEN r.seq = o.forward_station_count THEN dest.name
+                    ELSE COALESCE(prev_station.name, origin.name) END AS fromStationName,
+               CASE WHEN r.seq = o.forward_station_count THEN CONCAT('收件人 ', o.receiver_name)
+                    ELSE dest.name END AS toStationName,
+               r.arrive_trip_no           AS tripNo,
+               r.depart_time              AS departTime,
+               r.actual_arrive_time       AS arriveTime,
+               r.status                   AS legStatus,
+               o.sender_name              AS senderName,
+               o.receiver_name            AS receiverName,
+               o.receiver_phone           AS receiverPhone,
+               o.goods_desc               AS goodsDesc
+        FROM order_route r
+                 JOIN delivery_order o ON o.id = r.order_id
+                 LEFT JOIN order_route prev ON prev.order_id = r.order_id AND prev.seq = r.seq - 1
+                 LEFT JOIN station prev_station ON prev_station.id = prev.station_id
+                 LEFT JOIN station origin ON origin.id = o.from_station_id
+                 JOIN station dest ON dest.id = r.station_id
+        WHERE r.postman_id = #{postmanId}
+          AND o.state IN
+        <foreach collection="orderStates" item="s" open="(" separator="," close=")">#{s}</foreach>
+        ORDER BY r.id DESC
+    </select>
 
 </mapper>

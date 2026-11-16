@@ -42,6 +42,9 @@ public class DeliveryOrder
     private Integer resubmitCount;
     private Integer version;
 
+    /** 退回单记录的原单号；普通订单为 null */
+    private String returnOf;
+
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 
@@ -273,6 +276,16 @@ public class DeliveryOrder
     public void setVersion(Integer version)
     {
         this.version = version;
+    }
+
+    public String getReturnOf()
+    {
+        return returnOf;
+    }
+
+    public void setReturnOf(String returnOf)
+    {
+        this.returnOf = returnOf;
     }
 
     public LocalDateTime getCreateTime()

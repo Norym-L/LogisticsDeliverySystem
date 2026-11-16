@@ -6,11 +6,19 @@
     <insert id="insert" parameterType="DeliveryOrder" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO delivery_order (order_no, sender_name, sender_phone, receiver_name, receiver_phone,
                                     from_station_id, to_station_id, goods_desc, weight,
-                                    state, approve_deadline)
+                                    state, approve_deadline, return_of)
         VALUES (#{orderNo}, #{senderName}, #{senderPhone}, #{receiverName}, #{receiverPhone},
                 #{fromStationId}, #{toStationId}, #{goodsDesc}, #{weight},
-                #{state}, #{approveDeadline})
+                #{state}, #{approveDeadline}, #{returnOf})
     </insert>
+
+    <select id="findByReturnOf" resultType="DeliveryOrder">
+        SELECT *
+        FROM delivery_order
+        WHERE return_of = #{orderNo}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
 
     <select id="findByOrderNo" resultType="DeliveryOrder">
         SELECT *
@@ -37,10 +45,10 @@
           AND state = 'DELIVERING'
     </update>
 
-    <!-- 拒收：状态转 RETURNING，回程路线由 service 在同一事务里追加 -->
+    <!-- 拒收：原单终结为 REFUSED，退回单由 service 在同一事务里新建 -->
     <update id="refuse">
         UPDATE delivery_order
-        SET state         = 'RETURNING',
+        SET state         = 'REFUSED',
             refuse_reason = #{reason},
             refuse_time   = #{now},
             version       = version + 1
@@ -133,11 +141,12 @@
         </choose>
     </update>
 
-    <update id="updateState">
+    <update id="transition">
         UPDATE delivery_order
-        SET state   = #{state},
+        SET state   = #{to},
             version = version + 1
         WHERE order_no = #{orderNo}
+          AND state = #{from}
     </update>
 
 </mapper>

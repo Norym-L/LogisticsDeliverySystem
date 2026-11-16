@@ -69,22 +69,28 @@ public class OrderServiceImpl implements OrderService
         validateForm(request);
 
         LocalDateTime now = LocalDateTime.now();
+        DeliveryOrder order = new DeliveryOrder();
+        fillForm(order, request);
+        order.setState(OrderState.WAITING);
+        order.setApproveDeadline(now.plusSeconds(approveTimeoutSeconds));
+        insertWithRetry(order);
+        return new CreatedOrderView(order.getOrderNo(), order.getState().name(), order.getApproveDeadline());
+    }
+
+    /** 取号并插入；极低概率撞号时换一个随机串重试 */
+    private void insertWithRetry(DeliveryOrder order)
+    {
         for (int attempt = 0; attempt < ORDER_NO_RETRY; attempt++)
         {
-            DeliveryOrder order = new DeliveryOrder();
             order.setOrderNo(nextOrderNo());
-            fillForm(order, request);
-            order.setState(OrderState.WAITING);
-            order.setApproveDeadline(now.plusSeconds(approveTimeoutSeconds));
-
             try
             {
                 orderMapper.insert(order);
-                return new CreatedOrderView(order.getOrderNo(), order.getState().name(), order.getApproveDeadline());
+                return;
             }
             catch (DuplicateKeyException e)
             {
-                // 并发下取到同一个流水号，重新取号再试
+                // 撞号了，重新取号
             }
         }
         throw new ApiException(500, "订单号生成冲突，请重试");
@@ -118,7 +124,6 @@ public class OrderServiceImpl implements OrderService
         DeliveryOrder order = requireOrder(orderNo);
         Map<Long, Station> stations = loadStations();
 
-        int forwardCount = order.getForwardStationCount() == null ? Integer.MAX_VALUE : order.getForwardStationCount();
         List<RouteNodeView> trajectory = new ArrayList<>();
         for (OrderRoute route : routeMapper.findByOrderId(order.getId()))
         {
@@ -128,9 +133,9 @@ public class OrderServiceImpl implements OrderService
                     route.getStatus() == null ? null : route.getStatus().name(),
                     route.getDepartTime(),
                     route.getActualArriveTime(),
-                    route.getArriveTripNo(),
-                    route.getSeq() > forwardCount));
+                    route.getArriveTripNo()));
         }
+        DeliveryOrder returnOrder = orderMapper.findByReturnOf(order.getOrderNo());
 
         return new OrderDetailView(
                 order.getOrderNo(),
@@ -145,7 +150,8 @@ public class OrderServiceImpl implements OrderService
                 new OrderDetailView.Events(order.getCreateTime(), order.getApproveTime(),
                         order.getReceiveTime(), order.getRefuseTime()),
                 order.getRejectReason(),
-                order.getRefuseReason());
+                order.getRefuseReason(),
+                returnOrder == null ? null : returnOrder.getOrderNo());
     }
 
     @Override
@@ -191,7 +197,7 @@ public class OrderServiceImpl implements OrderService
 
     @Override
     @Transactional
-    public void refuse(String orderNo, String receiverPhone, String reason)
+    public CreatedOrderView refuse(String orderNo, String receiverPhone, String reason)
     {
         if (isBlank(receiverPhone))
         {
@@ -216,7 +222,7 @@ public class OrderServiceImpl implements OrderService
         }
 
         routeMapper.updateStatus(order.getId(), order.getCurrentSeq(), RouteStatus.REFUSED);
-        appendReturnRoute(order);
+        return createReturnOrder(order);
     }
 
     @Override
@@ -256,26 +262,29 @@ public class OrderServiceImpl implements OrderService
     }
 
     /**
-     * 拒收后按原路退回：站点逆序，序号接在去程之后。
-     * 去程 seq 1..n，回程 seq n+1..2n-1，最后一行回到始发站。
-     */    private void appendReturnRoute(DeliveryOrder order)
+     * 生成退回单：方向相反的独立订单，走同一套审批与运输流程。
+     * <p>
+     * 寄件人与收件人对调——原收件人把货寄回，原寄件人收货。
+     * 用户不需要重新填写收发信息，这正是"拒收流程与发起订单相似，
+     * 只省掉填写收寄信息那一步"的落地方式。
+     */
+    private CreatedOrderView createReturnOrder(DeliveryOrder original)
     {
-        List<OrderRoute> forward = routeMapper.findByOrderId(order.getId());
-        int n = forward.size();
-        if (n < 2)
-        {
-            return;
-        }
-        for (int k = 1; k <= n - 1; k++)
-        {
-            OrderRoute back = new OrderRoute();
-            back.setOrderId(order.getId());
-            back.setSeq(n + k);
-            back.setStationId(forward.get(n - 1 - k).getStationId());
-            back.setStatus(RouteStatus.PENDING);
-            back.setRemark("拒收退回");
-            routeMapper.insert(back);
-        }
+        DeliveryOrder back = new DeliveryOrder();
+        back.setSenderName(original.getReceiverName());
+        back.setSenderPhone(original.getReceiverPhone());
+        back.setReceiverName(original.getSenderName());
+        back.setReceiverPhone(original.getSenderPhone());
+        back.setFromStationId(original.getToStationId());
+        back.setToStationId(original.getFromStationId());
+        back.setGoodsDesc(original.getGoodsDesc());
+        back.setWeight(original.getWeight());
+        back.setState(OrderState.WAITING);
+        back.setApproveDeadline(LocalDateTime.now().plusSeconds(approveTimeoutSeconds));
+        back.setReturnOf(original.getOrderNo());
+
+        insertWithRetry(back);
+        return new CreatedOrderView(back.getOrderNo(), back.getState().name(), back.getApproveDeadline());
     }
 
     private DeliveryOrder requireOrder(String orderNo)

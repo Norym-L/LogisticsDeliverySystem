@@ -1,13 +1,24 @@
 package norym.logisticsdeliverysystem.service;
 
+import norym.logisticsdeliverysystem.dto.PostmanTask;
+
+import java.util.List;
+
 /**
- * 邮递员扫码操作：扫同一个二维码，动作由接口区分。
+ * 快递员端。快递员只负责最后一公里，不参与中转运输。
  */
 public interface PostmanOrderService
 {
-    /** 扫码开始送货：确认本段指派给自己，登记发运时间 */
-    void depart(String orderNo, Long postmanId);
+    /**
+     * 我的任务。
+     *
+     * @param type pending 手里待送（货已到站等取件 / 派送中）；completed 已完成
+     */
+    List<PostmanTask> tasks(Long postmanId, String type);
 
-    /** 扫码确认到下一站：推进路线进度，到末站自动转派送中 */
-    void arrive(String orderNo, Long postmanId);
+    /**
+     * 取件开始派送：确认该单指派给了本人、货物已在目的站。
+     * 取件后订单才进入 DELIVERING，随后由收件人签收。
+     */
+    void pickup(String orderNo, Long postmanId);
 }

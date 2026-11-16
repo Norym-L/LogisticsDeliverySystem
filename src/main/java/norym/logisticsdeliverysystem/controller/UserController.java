@@ -70,15 +70,15 @@ public class UserController
         return ApiResult.ok();
     }
 
-    /** 拒收：同样校验收件人手机号，货物按原路退回 */
+    /** 拒收：原单终结，同时生成一张退回单，返回退回单号供查询 */
     @PostMapping("/{orderNo}/refuse")
-    public ApiResult<Void> refuse(@PathVariable("orderNo") String orderNo,
-                                  @RequestBody ReceiverActionRequest request)
+    public ApiResult<norym.logisticsdeliverysystem.dto.CreatedOrderView> refuse(
+            @PathVariable("orderNo") String orderNo,
+            @RequestBody ReceiverActionRequest request)
     {
-        orderService.refuse(orderNo,
+        return ApiResult.ok(orderService.refuse(orderNo,
                 request == null ? null : request.receiverPhone(),
-                request == null ? null : request.reason());
-        return ApiResult.ok();
+                request == null ? null : request.reason()));
     }
 
     /** 被拒后修改信息重提 */

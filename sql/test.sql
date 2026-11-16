@@ -105,50 +105,56 @@ CALL assert_eq((SELECT state FROM delivery_order WHERE id = @oid), 'DELIVERING',
 CALL assert_eq((SELECT current_station_id FROM delivery_order WHERE id = @oid), @st_to, '11 当前位置快照为目的站');
 CALL assert_eq((SELECT postman_id FROM order_route WHERE order_id = @oid AND seq = 5), @pm, '12 末段已分配配送员');
 
--- ---------- 4. 拒收，生成回程 ----------
+-- ---------- 4. 拒收：原单直接终结 ----------
 UPDATE order_route SET status = 'REFUSED' WHERE order_id = @oid AND seq = 5;
 
 UPDATE delivery_order
-SET state = 'RETURNING', refuse_reason = '收件人拒收', refuse_time = NOW()
+SET state = 'REFUSED', refuse_reason = '收件人拒收', refuse_time = NOW()
 WHERE id = @oid;
+
+CALL assert_eq((SELECT state FROM delivery_order WHERE id = @oid), 'REFUSED', '13 拒收后原单终结为已拒收');
+CALL assert_eq((SELECT refuse_reason FROM delivery_order WHERE id = @oid), '收件人拒收', '14 拒收原因已记录');
+
+-- ---------- 5. 生成退回单：方向相反，收发件人对调 ----------
+-- 服务层做的事，这里用一条 INSERT ... SELECT 复现
+INSERT INTO delivery_order (order_no, sender_name, sender_phone, receiver_name, receiver_phone,
+                            from_station_id, to_station_id, goods_desc, weight,
+                            state, approve_deadline, return_of)
+SELECT 'LD20261115000009', receiver_name, receiver_phone, sender_name, sender_phone,
+       to_station_id, from_station_id, goods_desc, weight,
+       'WAITING', DATE_ADD(NOW(), INTERVAL 2 MINUTE), order_no
+FROM delivery_order
+WHERE id = @oid;
+SET @rid = LAST_INSERT_ID();
+
+CALL assert_eq((SELECT return_of FROM delivery_order WHERE id = @rid),
+               (SELECT order_no FROM delivery_order WHERE id = @oid), '15 退回单记录了原单号');
+CALL assert_eq((SELECT from_station_id FROM delivery_order WHERE id = @rid), @st_to, '16 退回单从原目的站发出');
+CALL assert_eq((SELECT to_station_id FROM delivery_order WHERE id = @rid), @st_from, '17 退回单寄回原始发站');
+CALL assert_eq((SELECT receiver_phone FROM delivery_order WHERE id = @rid), '13700000001', '18 退回单收件人是原寄件人');
+
+-- 退回单走同一套流程：批准后生成自己的路线，站点逆序
+UPDATE delivery_order
+SET state = 'APPROVED', forward_station_count = 5, current_seq = 1, current_station_id = @st_to
+WHERE id = @rid;
 
 INSERT INTO order_route (order_id, seq, station_id, status)
-SELECT @oid, t.seq, s.id, 'PENDING'
-FROM (SELECT 6 AS seq, 'ST005' AS code
-      UNION ALL SELECT 7, 'ST003'
-      UNION ALL SELECT 8, 'ST002'
-      UNION ALL SELECT 9, 'ST001') t
+SELECT @rid, t.seq, s.id, 'PENDING'
+FROM (SELECT 1 AS seq, 'ST006' AS code
+      UNION ALL SELECT 2, 'ST005'
+      UNION ALL SELECT 3, 'ST003'
+      UNION ALL SELECT 4, 'ST002'
+      UNION ALL SELECT 5, 'ST001') t
          JOIN station s ON s.code = t.code;
 
-CALL assert_eq((SELECT state FROM delivery_order WHERE id = @oid), 'RETURNING', '13 拒收后进入退回中');
-CALL assert_eq((SELECT COUNT(*) FROM order_route WHERE order_id = @oid), '9', '14 回程追加 4 行，共 9 行');
-CALL assert_eq((SELECT station_id FROM order_route WHERE order_id = @oid AND seq = 6), (SELECT id FROM station WHERE code = 'ST005'), '15 回程首站为目的站的上一站');
-CALL assert_eq((SELECT station_id FROM order_route WHERE order_id = @oid AND seq = 9), @st_from, '16 回程终点回到始发站');
-CALL assert_eq((SELECT seq FROM order_route WHERE order_id = @oid ORDER BY seq DESC LIMIT 1), '9', '17 回程序号连续递增，无跳号');
-
--- 回程同样要求相邻站连通
-CALL assert_eq((SELECT COUNT(*)
-                FROM order_route r1
-                         JOIN order_route r2 ON r2.order_id = r1.order_id AND r2.seq = r1.seq + 1
-                         LEFT JOIN route_edge e
-                                   ON e.station_a_id = LEAST(r1.station_id, r2.station_id)
-                                       AND e.station_b_id = GREATEST(r1.station_id, r2.station_id)
-                WHERE r1.order_id = @oid
-                  AND r1.seq >= 5
-                  AND e.id IS NULL), '0', '18 回程相邻站之间必须存在线路');
-
--- ---------- 5. 回到始发站，退回完成 ----------
-UPDATE order_route
-SET status = 'ARRIVED', actual_arrive_time = NOW()
-WHERE order_id = @oid AND seq BETWEEN 6 AND 9;
+CALL assert_eq((SELECT COUNT(*) FROM order_route WHERE order_id = @rid), '5', '19 退回单同样生成 5 行路线');
+CALL assert_eq((SELECT station_id FROM order_route WHERE order_id = @rid AND seq = 5), @st_from, '20 退回单终点是原始发站');
 
 UPDATE delivery_order
-SET state = 'RETURNED', current_seq = 9, current_station_id = @st_from
-WHERE id = @oid;
+SET state = 'RECEIVED', receive_time = NOW(), current_seq = 5, current_station_id = @st_from
+WHERE id = @rid;
 
-CALL assert_eq((SELECT state FROM delivery_order WHERE id = @oid), 'RETURNED', '19 回到始发站后状态为已退回');
-CALL assert_eq((SELECT current_seq FROM delivery_order WHERE id = @oid), '9', '20 路线进度单调推进到 9，未回退');
-CALL assert_eq((SELECT COUNT(*) FROM order_route WHERE order_id = @oid AND status = 'ARRIVED'), '7', '21 中间站到站记录 7 条（去程 3 + 回程 4），末段单独为 REFUSED');
+CALL assert_eq((SELECT state FROM delivery_order WHERE id = @rid), 'RECEIVED', '21 退回单签收后终结');
 
 -- ---------- 6. 被拒后修改重提（第二单） ----------
 INSERT INTO delivery_order (order_no, sender_name, sender_phone, receiver_name, receiver_phone,

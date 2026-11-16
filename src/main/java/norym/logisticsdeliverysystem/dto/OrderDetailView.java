@@ -22,7 +22,8 @@ public record OrderDetailView(
         List<RouteNodeView> trajectory,
         Events events,
         String rejectReason,
-        String refuseReason)
+        String refuseReason,
+        String returnOrderNo)
 {
     /**
      * 订单级事件时间：下单、批准、签收、拒收。

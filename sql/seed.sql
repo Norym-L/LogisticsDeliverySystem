@@ -70,18 +70,33 @@ FROM (SELECT 'st001' AS username, '5dacc871ac0cd4e78b4c41f8bc62d95e6d3030628f5f0
 
 
 -- -------------------------------------------------------------
--- 4. 配送员：上海 2 名、杭州 1 名
+-- 4. 配送员：每个驿站 2 名，共 16 名
+--    最后一公里的指派要求"配送员属于目的站"，所以每个站都要有人，
+--    否则发往该站的订单在末段会找不到合法承运人。
 -- -------------------------------------------------------------
 INSERT INTO postman (username, password_hash, salt, name, phone, station_id)
 SELECT t.username, t.password_hash, t.salt, t.name, t.phone, s.id
-FROM (SELECT 'pm001' AS username, 'da0fbf6942737e645526fdd6606b41952130b9e2123a6c5e3aaea404f7b04db8' AS password_hash, '87ef340506635912' AS salt, '何申城' AS name, '13900000001' AS phone, 'ST006' AS code
-      UNION ALL SELECT 'pm002', '08dcd609c63525880e564ce945d9d5d0a7195cfc99ca04f4d7007a8567202b30', '9012507445bcc83c', '沈沪生', '13900000002', 'ST006'
-      UNION ALL SELECT 'pm003', '39c47772b484876f6afb80b4973bea21ce4ae8021306118dd87dd500ee15ef8e', '726f24ea6b860399', '钱临安', '13900000003', 'ST008') t
+FROM (SELECT 'pm001' AS username, 'da0fbf6942737e645526fdd6606b41952130b9e2123a6c5e3aaea404f7b04db8' AS password_hash, '87ef340506635912' AS salt, '何京生' AS name, '13900000001' AS phone, 'ST001' AS code
+      UNION ALL SELECT 'pm002', '08dcd609c63525880e564ce945d9d5d0a7195cfc99ca04f4d7007a8567202b30', '9012507445bcc83c', '许朝阳', '13900000002', 'ST001'
+      UNION ALL SELECT 'pm003', '39c47772b484876f6afb80b4973bea21ce4ae8021306118dd87dd500ee15ef8e', '726f24ea6b860399', '沈海河', '13900000003', 'ST002'
+      UNION ALL SELECT 'pm004', 'db9a542a49887f8d51beec9c9e05e0deb0517e1b49d41c4cabb1b9463838d845', '1286d78dbf9936e8', '邵津门', '13900000004', 'ST002'
+      UNION ALL SELECT 'pm005', '6d7f8092d69b21cfb1fd179e21679abe1001971425d688ae09bca394d916a27a', '116b84571fcca84e', '钱泉城', '13900000005', 'ST003'
+      UNION ALL SELECT 'pm006', 'b1150900534507c82b7a517b55818d3de10f87a2a653ec03fbad72851ec62060', '3d1cc24befceba0d', '孟历下', '13900000006', 'ST003'
+      UNION ALL SELECT 'pm007', '0ffdb75847eb1a347ee68b259c802d33f759c4300c58a5216986f41235aff14b', '00aae972bce12ae6', '陈中原', '13900000007', 'ST004'
+      UNION ALL SELECT 'pm008', '2bcd73a311a374e4f5988b184fd41c2ce9ec7a80a124b22f61701f680894f0d6', '6de09bf87235258f', '岳商都', '13900000008', 'ST004'
+      UNION ALL SELECT 'pm009', '4f79b84ab17a9b752269fb3b885a7822184908049aaa9c57619f267c7c8adb1e', 'b037d32b2c955f81', '孙金陵', '13900000009', 'ST005'
+      UNION ALL SELECT 'pm010', 'c042d097aac568437a806ff248d768c3046a593c9ba3d914d4d658b8a57ff642', 'e28f23f0ea636cf0', '周秦淮', '13900000010', 'ST005'
+      UNION ALL SELECT 'pm011', 'e071496ced6b25b279dab419a0e267bd56c87a8b1b1841fa99b51ff8963e19fa', '9434b4bd790b36fc', '吴申城', '13900000011', 'ST006'
+      UNION ALL SELECT 'pm012', 'fbdd40b811e0f0a374400ecc6b8f85d7dd7fc292fa0e714583f13a6358133bfb', '155f62e5783a694e', '郑浦江', '13900000012', 'ST006'
+      UNION ALL SELECT 'pm013', '59e2ed0c220f9f068ffb9d0003798a7dbf648bfc2c9674e861340f035f44f1b0', 'cca0859bbfa341b7', '冯江城', '13900000013', 'ST007'
+      UNION ALL SELECT 'pm014', '994235c2e4ba78fa3a276738facc3c9fe2ca924300d94cc61efbc83c5587ac6e', '9e3b4932d9399e8c', '韩汉口', '13900000014', 'ST007'
+      UNION ALL SELECT 'pm015', '1dd3b15be971ac8e62825aaaf67f22b30048b753f3e393a3a3d1abc56dbe4e2f', 'deb4406f000e2c93', '朱临安', '13900000015', 'ST008'
+      UNION ALL SELECT 'pm016', '992cafe23289be1eb9b041f611fb1e4ecbe8e9e02774d114870397bf6665cbc2', 'e91d4afac625ca12', '曹钱塘', '13900000016', 'ST008') t
          JOIN station s ON s.code = t.code;
 
 
 -- -------------------------------------------------------------
--- 自检：应返回 8 / 10 / 9 / 3
+-- 自检：应返回 8 / 10 / 9 / 16
 -- -------------------------------------------------------------
 SELECT (SELECT COUNT(*) FROM station)      AS station_cnt,
        (SELECT COUNT(*) FROM route_edge)   AS edge_cnt,

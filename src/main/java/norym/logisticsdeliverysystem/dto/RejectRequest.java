@@ -1,8 +1,8 @@
 package norym.logisticsdeliverysystem.dto;
 
 /**
- * 拒绝订单的请求体。
+ * 拒绝订单的请求体。操作人从会话取。
  */
-public record RejectRequest(Long operatorId, String reason)
+public record RejectRequest(String reason)
 {
 }

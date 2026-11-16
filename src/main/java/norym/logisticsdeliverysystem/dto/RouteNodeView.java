@@ -11,7 +11,6 @@ import java.time.LocalDateTime;
  * @param departTime 从本站发出的时间，尚未发运为 null
  * @param arriveTime 实际到达时间，未到达为 null
  * @param tripNo     该段承运车次
- * @param back       是否属于回程段（seq 大于去程站数）
  */
 public record RouteNodeView(
         int seq,
@@ -19,7 +18,6 @@ public record RouteNodeView(
         String status,
         LocalDateTime departTime,
         LocalDateTime arriveTime,
-        String tripNo,
-        boolean back)
+        String tripNo)
 {
 }

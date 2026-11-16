@@ -15,6 +15,9 @@ public interface DeliveryOrderMapper
 
     DeliveryOrder findByOrderNo(@Param("orderNo") String orderNo);
 
+    /** 原单对应的退回单，没有则返回 null */
+    DeliveryOrder findByReturnOf(@Param("orderNo") String orderNo);
+
     /** 手机号同时匹配寄件人与收件人，否则收件人查不到发给自己的件 */
     List<DeliveryOrder> findByPhone(@Param("phone") String phone);
 
@@ -62,5 +65,11 @@ public interface DeliveryOrderMapper
                 @Param("state") OrderState state,
                 @Param("prevSeq") Integer prevSeq);
 
-    int updateState(@Param("orderNo") String orderNo, @Param("state") OrderState state);
+    /**
+     * 状态迁移：带 from 条件，避免并发下把已经变化的订单又改一次。
+     * 返回 0 表示当时状态已不是 from。
+     */
+    int transition(@Param("orderNo") String orderNo,
+                   @Param("from") OrderState from,
+                   @Param("to") OrderState to);
 }

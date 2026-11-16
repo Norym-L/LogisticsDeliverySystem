@@ -1,18 +1,27 @@
 package norym.logisticsdeliverysystem.controller;
 
+import norym.logisticsdeliverysystem.auth.AuthService;
+import norym.logisticsdeliverysystem.auth.Role;
+import norym.logisticsdeliverysystem.auth.SessionUser;
 import norym.logisticsdeliverysystem.dto.ApiResult;
-import norym.logisticsdeliverysystem.dto.PostmanActionRequest;
+import norym.logisticsdeliverysystem.dto.PostmanTask;
+import norym.logisticsdeliverysystem.exception.ApiException;
 import norym.logisticsdeliverysystem.service.PostmanOrderService;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.SessionAttribute;
+
+import java.util.List;
 
 /**
- * 邮递员扫码接口。二维码内容就是订单号，动作由路径区分。
+ * 快递员接口：只涉及最后一公里。
  * <p>
- * postmanId 暂时由请求体传入，Session 上线后从会话取。
+ * 中转运输由车次承运，快递员不参与，所以这里没有发运/到站的概念，
+ * 只有"取件开始派送"，随后由收件人扫码签收。
  */
 @RestController
 @RequestMapping("/api/postman/orders")
@@ -25,21 +34,34 @@ public class PostmanController
         this.postmanOrderService = postmanOrderService;
     }
 
-    /** 扫码开始送货 */
-    @PostMapping("/{orderNo}/depart")
-    public ApiResult<Void> depart(@PathVariable("orderNo") String orderNo,
-                                  @RequestBody PostmanActionRequest request)
+    /** 我的任务：登录后先看这个，再去取件 */
+    @GetMapping
+    public ApiResult<List<PostmanTask>> tasks(@RequestParam(value = "type", required = false) String type,
+                                              @SessionAttribute(name = AuthService.SESSION_KEY, required = false) SessionUser user)
     {
-        postmanOrderService.depart(orderNo, request == null ? null : request.postmanId());
+        requirePostman(user);
+        return ApiResult.ok(postmanOrderService.tasks(user.id(), type));
+    }
+
+    /** 扫码取件，开始派送 */
+    @PostMapping("/{orderNo}/pickup")
+    public ApiResult<Void> pickup(@PathVariable("orderNo") String orderNo,
+                                  @SessionAttribute(name = AuthService.SESSION_KEY, required = false) SessionUser user)
+    {
+        requirePostman(user);
+        postmanOrderService.pickup(orderNo, user.id());
         return ApiResult.ok();
     }
 
-    /** 扫码确认货到下一站 */
-    @PostMapping("/{orderNo}/arrive")
-    public ApiResult<Void> arrive(@PathVariable("orderNo") String orderNo,
-                                  @RequestBody PostmanActionRequest request)
+    private void requirePostman(SessionUser user)
     {
-        postmanOrderService.arrive(orderNo, request == null ? null : request.postmanId());
-        return ApiResult.ok();
+        if (user == null)
+        {
+            throw new ApiException(401, "请先登录");
+        }
+        if (user.role() != Role.POSTMAN)
+        {
+            throw new ApiException(403, "该接口仅限快递员");
+        }
     }
 }

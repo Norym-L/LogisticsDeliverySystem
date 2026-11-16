@@ -9,4 +9,32 @@
         WHERE id = #{id}
     </select>
 
+    <select id="findByUsername" resultType="Postman">
+        SELECT id, username, password_hash, salt, name, phone, station_id, status, create_time
+        FROM postman
+        WHERE username = #{username}
+    </select>
+
+    <!-- 条件聚合算手里单量，避免逐个配送员再查一次 -->
+    <select id="findAllWithTaskCount" resultType="norym.logisticsdeliverysystem.dto.PostmanInfo">
+        SELECT p.id                  AS id,
+               p.username            AS username,
+               p.name                AS name,
+               p.phone               AS phone,
+               p.station_id          AS stationId,
+               s.name                AS stationName,
+               p.status               AS status,
+               COALESCE(SUM(CASE WHEN o.state IN ('SENDING', 'DELIVERING') THEN 1 ELSE 0 END), 0) AS activeTasks,
+               COALESCE(SUM(CASE WHEN o.state IN ('RECEIVED', 'REFUSED') THEN 1 ELSE 0 END), 0) AS doneTasks
+        FROM postman p
+                 LEFT JOIN station s ON s.id = p.station_id
+                 LEFT JOIN order_route r ON r.postman_id = p.id
+                 LEFT JOIN delivery_order o ON o.id = r.order_id
+        <where>
+            <if test="stationId != null">p.station_id = #{stationId}</if>
+        </where>
+        GROUP BY p.id, p.username, p.name, p.phone, p.station_id, s.name, p.status
+        ORDER BY p.station_id, p.id
+    </select>
+
 </mapper>
