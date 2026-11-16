@@ -1,0 +1,90 @@
+/* Muted blue, jade and lilac light blend into the existing silver rim. */
+:root {
+  --milk-focus-rim:#737f91;
+  --milk-focus-flow:#82a8d4;
+  --milk-focus-flow-jade:#83b9b2;
+  --milk-focus-flow-lilac:#b29dca;
+  --milk-focus-lap:5.2s;
+}
+:root[data-theme="dark"] {
+  --milk-focus-rim:#84909f;
+  --milk-focus-flow:#97b6df;
+  --milk-focus-flow-jade:#91c7bf;
+  --milk-focus-flow-lilac:#c0addd;
+}
+:root[data-theme="milk"] {
+  --milk-focus-rim:#898779;
+  --milk-focus-flow:#94aebd;
+  --milk-focus-flow-jade:#98b8a9;
+  --milk-focus-flow-lilac:#b9a7bd;
+}
+/* Focus never adds a frame to actions, selection controls or containers.
+   Reset ring variables, not box-shadow: the resting material keeps its depth. */
+:where(:focus,:focus-within) {
+  outline:none!important;
+  outline-offset:0!important;
+  --ring:transparent!important;
+  --tw-ring-shadow:0 0 transparent!important;
+  --tw-ring-offset-shadow:0 0 transparent!important;
+  --tw-inset-ring-shadow:0 0 transparent!important;
+  --tw-ring-offset-width:0px!important;
+}
+/* Only input editors get a keyboard fallback until their inner light is drawn. */
+:where(input:not([type="button"],[type="submit"],[type="reset"],[type="image"],[type="checkbox"],[type="radio"],[type="range"],[type="color"],[type="file"],[type="hidden"]),textarea,:is([contenteditable=""],[contenteditable="true" i],[contenteditable="plaintext-only" i]):not(button,a,select,[role="button"],[role="tab"],[role="checkbox"],[role="radio"],[role="switch"],[role="slider"])):focus-visible {
+  outline:2px solid var(--milk-focus)!important;
+  outline-offset:2px!important;
+}
+/* Composite editors and OTP decorate one visible boundary, not their children. */
+[data-milk-focus-source]:is(:focus,:focus-visible),
+[data-milk-focus-owner],
+[data-milk-focus-owner]:focus-within,
+:is([data-slot="input-group"],[data-slot="number-field-content"],[data-slot="tags-input"],[data-slot="command-input-wrapper"]):has([data-milk-focus-source]),
+[data-slot="tags-input"]:has([data-milk-focus-source]) [data-slot="tags-input-item"][data-state="active"] {
+  outline:none!important;
+  outline-offset:0!important;
+  --tw-ring-shadow:0 0 transparent!important;
+  --tw-ring-offset-shadow:0 0 transparent!important;
+  --tw-ring-offset-width:0px!important;
+}
+.milk-focus-overlay {
+  position:fixed;
+  inset:0;
+  width:100vw;
+  height:100vh;
+  margin:0;
+  padding:0;
+  border:0;
+  z-index:2147483647;
+  pointer-events:none!important;
+  overflow:visible;
+  visibility:hidden;
+}
+.milk-focus-overlay * { pointer-events:none!important }
+.milk-focus-overlay path { stroke-width:2px; stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke }
+.milk-focus-mask { stroke:#fff }
+.milk-focus-track { stroke:var(--milk-focus-rim); opacity:1 }
+.milk-focus-stop-blue { stop-color:var(--milk-focus-flow) }
+.milk-focus-stop-jade { stop-color:var(--milk-focus-flow-jade) }
+.milk-focus-stop-lilac { stop-color:var(--milk-focus-flow-lilac) }
+/* Blur supplies continuous fades at both ends of one light sweep. The mask
+   then confines every soft pixel to the same inner 2px rim as the steady base. */
+.milk-focus-light {
+  stroke-width:14px!important;
+  stroke-linecap:butt!important;
+  stroke-dasharray:22 78;
+  opacity:.9;
+  filter:blur(6px);
+  animation:milk-focus-flow var(--milk-focus-lap) linear infinite;
+}
+@keyframes milk-focus-flow { to { stroke-dashoffset:-100 } }
+@media(prefers-reduced-motion:reduce) {
+  .milk-focus-overlay path { animation:none!important }
+  .milk-focus-track { opacity:1; stroke:var(--milk-focus-rim) }
+  .milk-focus-light { display:none }
+}
+@media(forced-colors:active) {
+  :where(input,textarea,[contenteditable]):focus-visible { outline-color:Highlight!important }
+  .milk-focus-overlay { forced-color-adjust:none }
+  .milk-focus-track { stroke:Highlight; opacity:1 }
+  .milk-focus-light { display:none; animation:none!important }
+}

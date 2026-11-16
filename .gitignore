@@ -32,3 +32,8 @@ build/
 ### VS Code ###
 .vscode/
 /.workbuddy/
+
+### 前端 ###
+/web/node_modules/
+/web/shots/
+/src/main/resources/static/

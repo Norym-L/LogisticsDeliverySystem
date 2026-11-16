@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler
@@ -18,6 +19,17 @@ public class GlobalExceptionHandler
     {
         return ResponseEntity.status(toHttpStatus(e.getCode()))
                 .body(ApiResult.fail(e.getCode(), e.getMessage()));
+    }
+
+    /**
+     * 静态资源不存在时 Spring 抛的是 NoResourceFoundException，
+     * 不单独处理会落到下面的兜底分支，变成一个 500——那是错的，应该是 404。
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiResult<Void>> handleNotFound(NoResourceFoundException e)
+    {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResult.fail(404, "资源不存在：" + e.getResourcePath()));
     }
 
     @ExceptionHandler(Exception.class)
