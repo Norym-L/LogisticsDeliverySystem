@@ -24,4 +24,43 @@
           AND seq = #{seq}
     </update>
 
+    <select id="findByOrderIdAndSeq" resultType="OrderRoute">
+        SELECT *
+        FROM order_route
+        WHERE order_id = #{orderId}
+          AND seq = #{seq}
+    </select>
+
+    <update id="assign">
+        UPDATE order_route
+        SET postman_id     = #{postmanId},
+            arrive_trip_no = #{tripNo}
+        WHERE order_id = #{orderId}
+          AND seq = #{seq}
+          AND status = 'PENDING'
+    </update>
+
+    <!-- 发运时间记在"出发站"那一行；该行此时可能已是 ARRIVED，不能再拿 PENDING 当条件，
+         否则从第二站起会静默更新 0 行。改用 depart_time IS NULL 保证只写一次。 -->
+    <update id="markDepart">
+        UPDATE order_route
+        SET depart_time = #{now}
+        WHERE order_id = #{orderId}
+          AND seq = #{seq}
+          AND depart_time IS NULL
+    </update>
+
+    <update id="markArrive">
+        UPDATE order_route
+        SET status             = 'ARRIVED',
+            actual_arrive_time = #{now}
+        WHERE order_id = #{orderId}
+          AND seq = #{seq}
+          AND status = 'PENDING'
+    </update>
+
+    <delete id="deleteByOrderId">
+        DELETE FROM order_route WHERE order_id = #{orderId}
+    </delete>
+
 </mapper>

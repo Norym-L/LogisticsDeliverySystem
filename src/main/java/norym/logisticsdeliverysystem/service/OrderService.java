@@ -5,6 +5,7 @@ import norym.logisticsdeliverysystem.dto.OrderBriefView;
 import norym.logisticsdeliverysystem.dto.OrderDetailView;
 import norym.logisticsdeliverysystem.dto.OrderFormRequest;
 import norym.logisticsdeliverysystem.dto.OrderStatusView;
+import norym.logisticsdeliverysystem.dto.QrCodeView;
 
 import java.util.List;
 
@@ -30,4 +31,7 @@ public interface OrderService
 
     /** 被拒后修改信息重提 */
     void resubmit(String orderNo, OrderFormRequest request);
+
+    /** 二维码内容（服务器出内容，前端画图） */
+    QrCodeView qrCode(String orderNo);
 }

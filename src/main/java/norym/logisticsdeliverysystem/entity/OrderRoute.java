@@ -17,6 +17,7 @@ public class OrderRoute
     private Long stationId;
     private String arriveTripNo;
     private LocalDateTime plannedTime;
+    private LocalDateTime departTime;
     private LocalDateTime actualArriveTime;
     private Long arriveOperatorId;
     private Long postmanId;
@@ -81,6 +82,16 @@ public class OrderRoute
     public void setPlannedTime(LocalDateTime plannedTime)
     {
         this.plannedTime = plannedTime;
+    }
+
+    public LocalDateTime getDepartTime()
+    {
+        return departTime;
+    }
+
+    public void setDepartTime(LocalDateTime departTime)
+    {
+        this.departTime = departTime;
     }
 
     public LocalDateTime getActualArriveTime()

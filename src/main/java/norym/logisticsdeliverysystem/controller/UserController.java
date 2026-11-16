@@ -89,4 +89,11 @@ public class UserController
         orderService.resubmit(orderNo, request);
         return ApiResult.ok();
     }
+
+    /** 二维码内容：服务器只出字符串，图片由前端画 */
+    @GetMapping("/{orderNo}/qrcode")
+    public ApiResult<norym.logisticsdeliverysystem.dto.QrCodeView> qrCode(@PathVariable("orderNo") String orderNo)
+    {
+        return ApiResult.ok(orderService.qrCode(orderNo));
+    }
 }

@@ -1,6 +1,7 @@
 package norym.logisticsdeliverysystem.mapper;
 
 import norym.logisticsdeliverysystem.entity.DeliveryOrder;
+import norym.logisticsdeliverysystem.entity.OrderState;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -39,4 +40,27 @@ public interface DeliveryOrderMapper
 
     /** 审批超时批量转 REJECTED，返回受影响行数 */
     int rejectTimeout(@Param("now") LocalDateTime now);
+
+    /** 按状态查列表，管理端"待审批请求"用 */
+    List<DeliveryOrder> findByState(@Param("state") OrderState state);
+
+    /** 批准：只认 WAITING，同时写入路线站数与起点位置 */
+    int approve(@Param("orderNo") String orderNo,
+                @Param("operatorId") Long operatorId,
+                @Param("now") LocalDateTime now,
+                @Param("stationCount") int stationCount,
+                @Param("fromStationId") Long fromStationId);
+
+    int reject(@Param("orderNo") String orderNo, @Param("reason") String reason);
+
+    /**
+     * 推进到下一站：用 current_seq 做乐观条件，避免两个邮递员同时扫码把进度推两次。
+     */
+    int advance(@Param("orderNo") String orderNo,
+                @Param("seq") int seq,
+                @Param("stationId") Long stationId,
+                @Param("state") OrderState state,
+                @Param("prevSeq") Integer prevSeq);
+
+    int updateState(@Param("orderNo") String orderNo, @Param("state") OrderState state);
 }

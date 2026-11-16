@@ -85,4 +85,59 @@
           AND approve_deadline &lt; #{now}
     </update>
 
+    <select id="findByState" resultType="DeliveryOrder">
+        SELECT *
+        FROM delivery_order
+        WHERE state = #{state}
+        ORDER BY create_time DESC
+    </select>
+
+    <!-- 批准：state='WAITING' 是并发闸门，与超时任务抢同一单时只有一方生效 -->
+    <update id="approve">
+        UPDATE delivery_order
+        SET state              = 'APPROVED',
+            approve_by         = #{operatorId},
+            approve_time       = #{now},
+            forward_station_count = #{stationCount},
+            current_seq        = 1,
+            current_station_id = #{fromStationId},
+            version            = version + 1
+        WHERE order_no = #{orderNo}
+          AND state = 'WAITING'
+    </update>
+
+    <update id="reject">
+        UPDATE delivery_order
+        SET state         = 'REJECTED',
+            reject_reason = #{reason},
+            version       = version + 1
+        WHERE order_no = #{orderNo}
+          AND state = 'WAITING'
+    </update>
+
+    <!-- 推进：prevSeq 是乐观条件，两个邮递员同时扫码时只有一个能推进 -->
+    <update id="advance">
+        UPDATE delivery_order
+        SET current_seq        = #{seq},
+            current_station_id = #{stationId},
+            state              = #{state},
+            version            = version + 1
+        WHERE order_no = #{orderNo}
+        <choose>
+            <when test="prevSeq == null">
+                AND current_seq IS NULL
+            </when>
+            <otherwise>
+                AND current_seq = #{prevSeq}
+            </otherwise>
+        </choose>
+    </update>
+
+    <update id="updateState">
+        UPDATE delivery_order
+        SET state   = #{state},
+            version = version + 1
+        WHERE order_no = #{orderNo}
+    </update>
+
 </mapper>

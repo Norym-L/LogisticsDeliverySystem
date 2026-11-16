@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="norym.logisticsdeliverysystem.mapper.RouteEdgeMapper">
+
+    <select id="findAll" resultType="RouteEdge">
+        SELECT id, station_a_id, station_b_id, distance_km, status
+        FROM route_edge
+        WHERE status = 1
+    </select>
+
+</mapper>

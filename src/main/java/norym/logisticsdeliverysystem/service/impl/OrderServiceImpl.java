@@ -5,6 +5,7 @@ import norym.logisticsdeliverysystem.dto.OrderBriefView;
 import norym.logisticsdeliverysystem.dto.OrderDetailView;
 import norym.logisticsdeliverysystem.dto.OrderFormRequest;
 import norym.logisticsdeliverysystem.dto.OrderStatusView;
+import norym.logisticsdeliverysystem.dto.QrCodeView;
 import norym.logisticsdeliverysystem.dto.RouteNodeView;
 import norym.logisticsdeliverysystem.dto.StationView;
 import norym.logisticsdeliverysystem.entity.DeliveryOrder;
@@ -125,6 +126,7 @@ public class OrderServiceImpl implements OrderService
                     route.getSeq(),
                     stationName(stations, route.getStationId()),
                     route.getStatus() == null ? null : route.getStatus().name(),
+                    route.getDepartTime(),
                     route.getActualArriveTime(),
                     route.getArriveTripNo(),
                     route.getSeq() > forwardCount));
@@ -246,11 +248,17 @@ public class OrderServiceImpl implements OrderService
         }
     }
 
+    @Override
+    public QrCodeView qrCode(String orderNo)
+    {
+        DeliveryOrder order = requireOrder(orderNo);
+        return new QrCodeView(order.getOrderNo(), order.getOrderNo(), "ORDER_NO");
+    }
+
     /**
      * 拒收后按原路退回：站点逆序，序号接在去程之后。
      * 去程 seq 1..n，回程 seq n+1..2n-1，最后一行回到始发站。
-     */
-    private void appendReturnRoute(DeliveryOrder order)
+     */    private void appendReturnRoute(DeliveryOrder order)
     {
         List<OrderRoute> forward = routeMapper.findByOrderId(order.getId());
         int n = forward.size();
