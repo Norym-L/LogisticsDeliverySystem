@@ -83,6 +83,10 @@ public class PostmanOrderServiceImpl implements PostmanOrderService
         {
             throw new ApiException(409, "已取件，请勿重复扫码");
         }
+        if (routeMapper.updateStatus(order.getId(), order.getForwardStationCount(), RouteStatus.DELIVERING) == 0)
+        {
+            throw new ApiException(409, "取件失败，路段状态已变化");
+        }
         if (orderMapper.transition(orderNo, OrderState.SENDING, OrderState.DELIVERING) == 0)
         {
             throw new ApiException(409, "取件失败，订单状态已变化");

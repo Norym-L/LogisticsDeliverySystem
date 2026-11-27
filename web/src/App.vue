@@ -6,6 +6,6 @@ const route = useRoute()
 </script>
 
 <template>
-  <RouterView v-if="route.name === 'login'" />
+  <RouterView v-if="route.meta.shell === 'none'" />
   <AppShell v-else />
 </template>

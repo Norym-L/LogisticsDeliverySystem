@@ -48,9 +48,10 @@ public class AdminPostmanServiceImpl implements AdminPostmanService
             throw new ApiException(403, "只能查看本站配送员的任务");
         }
 
-        List<String> statuses = "completed".equalsIgnoreCase(type)
-                ? List.of("ARRIVED", "SIGNED", "REFUSED")
-                : List.of("PENDING");
-        return routeMapper.findTasks(postmanId, statuses);
+        // findTasks 按订单状态过滤，与快递员自己的任务列表、卡片上的单量统计一致
+        List<String> orderStates = "completed".equalsIgnoreCase(type)
+                ? List.of("RECEIVED", "REFUSED")
+                : List.of("SENDING", "DELIVERING");
+        return routeMapper.findTasks(postmanId, orderStates);
     }
 }

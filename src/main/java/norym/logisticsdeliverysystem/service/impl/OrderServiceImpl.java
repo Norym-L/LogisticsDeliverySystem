@@ -1,6 +1,7 @@
 package norym.logisticsdeliverysystem.service.impl;
 
 import norym.logisticsdeliverysystem.dto.CreatedOrderView;
+import norym.logisticsdeliverysystem.dto.FieldLimits;
 import norym.logisticsdeliverysystem.dto.OrderBriefView;
 import norym.logisticsdeliverysystem.dto.OrderDetailView;
 import norym.logisticsdeliverysystem.dto.OrderFormRequest;
@@ -113,7 +114,8 @@ public class OrderServiceImpl implements OrderService
                     order.getState() == null ? null : order.getState().name(),
                     stationName(stations, order.getFromStationId()),
                     stationName(stations, order.getToStationId()),
-                    order.getCreateTime()));
+                    order.getCreateTime(),
+                    order.getApproveDeadline()));
         }
         return result;
     }
@@ -151,7 +153,8 @@ public class OrderServiceImpl implements OrderService
                         order.getReceiveTime(), order.getRefuseTime()),
                 order.getRejectReason(),
                 order.getRefuseReason(),
-                returnOrder == null ? null : returnOrder.getOrderNo());
+                returnOrder == null ? null : returnOrder.getOrderNo(),
+                order.getReturnOf());
     }
 
     @Override
@@ -215,6 +218,7 @@ public class OrderServiceImpl implements OrderService
         }
 
         String finalReason = isBlank(reason) ? "收件人拒收" : reason.trim();
+        requireMaxLength(finalReason, FieldLimits.REASON, "拒收原因");
         int rows = orderMapper.refuse(orderNo, receiverPhone.trim(), finalReason, LocalDateTime.now());
         if (rows == 0)
         {
@@ -235,6 +239,14 @@ public class OrderServiceImpl implements OrderService
         if (existing.getState() != OrderState.REJECTED)
         {
             throw new ApiException(409, "只有被拒绝的订单可以修改重提");
+        }
+        if (!request.senderPhone().trim().equals(existing.getSenderPhone()))
+        {
+            throw new ApiException(403, "手机号与寄件人不一致");
+        }
+        if (!isBlank(existing.getReturnOf()))
+        {
+            requireSameDirection(existing, request);
         }
         int used = existing.getResubmitCount() == null ? 0 : existing.getResubmitCount();
         if (used >= maxResubmit)
@@ -307,10 +319,14 @@ public class OrderServiceImpl implements OrderService
         {
             throw new ApiException(400, "请求体不能为空");
         }
-        requireText(request.senderName(), "寄件人姓名");
-        requireText(request.receiverName(), "收件人姓名");
+        requireText(request.senderName(), "寄件人姓名", FieldLimits.NAME);
+        requireText(request.receiverName(), "收件人姓名", FieldLimits.NAME);
         requirePhone(request.senderPhone(), "寄件人手机号");
         requirePhone(request.receiverPhone(), "收件人手机号");
+        if (request.goodsDesc() != null && request.goodsDesc().trim().length() > FieldLimits.GOODS)
+        {
+            throw new ApiException(400, "货物描述不能超过 " + FieldLimits.GOODS + " 个字");
+        }
 
         if (request.fromStationId() == null || request.toStationId() == null)
         {
@@ -328,9 +344,16 @@ public class OrderServiceImpl implements OrderService
         {
             throw new ApiException(400, "目的站不存在");
         }
-        if (request.weight() != null && request.weight().compareTo(BigDecimal.ZERO) < 0)
+        if (request.weight() != null)
         {
-            throw new ApiException(400, "重量不能为负");
+            if (request.weight().compareTo(BigDecimal.ZERO) < 0)
+            {
+                throw new ApiException(400, "重量不能为负");
+            }
+            if (request.weight().compareTo(FieldLimits.MAX_WEIGHT) > 0)
+            {
+                throw new ApiException(400, "重量超出范围");
+            }
         }
     }
 
@@ -342,16 +365,47 @@ public class OrderServiceImpl implements OrderService
         order.setReceiverPhone(request.receiverPhone().trim());
         order.setFromStationId(request.fromStationId());
         order.setToStationId(request.toStationId());
-        order.setGoodsDesc(request.goodsDesc());
+        order.setGoodsDesc(isBlank(request.goodsDesc()) ? null : request.goodsDesc().trim());
         order.setWeight(request.weight());
     }
 
-    private void requireText(String value, String field)
+    /** 退回单的收发件人和起止站必须保持对调结果，只允许改货物信息 */
+    private void requireSameDirection(DeliveryOrder existing, OrderFormRequest request)
+    {
+        boolean same = sameText(existing.getSenderName(), request.senderName())
+                && sameText(existing.getSenderPhone(), request.senderPhone())
+                && sameText(existing.getReceiverName(), request.receiverName())
+                && sameText(existing.getReceiverPhone(), request.receiverPhone())
+                && existing.getFromStationId().equals(request.fromStationId())
+                && existing.getToStationId().equals(request.toStationId());
+        if (!same)
+        {
+            throw new ApiException(400, "退回单不能修改收发件人和起止站");
+        }
+    }
+
+    private void requireText(String value, String field, int max)
     {
         if (isBlank(value))
         {
             throw new ApiException(400, field + "不能为空");
         }
+        requireMaxLength(value.trim(), max, field);
+    }
+
+    private void requireMaxLength(String value, int max, String field)
+    {
+        if (value != null && value.length() > max)
+        {
+            throw new ApiException(400, field + "不能超过 " + max + " 个字");
+        }
+    }
+
+    private boolean sameText(String left, String right)
+    {
+        String a = left == null ? "" : left.trim();
+        String b = right == null ? "" : right.trim();
+        return a.equals(b);
     }
 
     private void requirePhone(String phone, String field)

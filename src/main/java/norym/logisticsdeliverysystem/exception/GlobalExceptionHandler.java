@@ -3,6 +3,7 @@ package norym.logisticsdeliverysystem.exception;
 import norym.logisticsdeliverysystem.dto.ApiResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -30,6 +31,15 @@ public class GlobalExceptionHandler
     {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ApiResult.fail(404, "资源不存在：" + e.getResourcePath()));
+    }
+
+    /** 长度或约束没在业务层拦住时，仍然返回 400，而不是笼统的 500 */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResult<Void>> handleData(DataIntegrityViolationException e)
+    {
+        log.warn("数据约束未通过", e);
+        return ResponseEntity.badRequest()
+                .body(ApiResult.fail(400, "提交的内容超出长度或不符合数据约束"));
     }
 
     @ExceptionHandler(Exception.class)

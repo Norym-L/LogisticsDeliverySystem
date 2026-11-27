@@ -2,6 +2,7 @@ package norym.logisticsdeliverysystem.service;
 
 import norym.logisticsdeliverysystem.dto.OrderBriefView;
 import norym.logisticsdeliverysystem.dto.RoutePlanView;
+import norym.logisticsdeliverysystem.dto.StationInboxItem;
 
 import java.util.List;
 
@@ -15,6 +16,9 @@ public interface AdminOrderService
 {
     /** 待审批请求 */
     List<OrderBriefView> pending();
+
+    /** 节点管理员本站待办：待发运、待到货、待派快递员 */
+    List<StationInboxItem> inbox(Long stationId);
 
     /** 系统推荐的最短路线，供批准前参考 */
     RoutePlanView plan(String orderNo);

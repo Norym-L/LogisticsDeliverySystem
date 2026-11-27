@@ -11,6 +11,7 @@ public record OrderBriefView(
         String state,
         String fromStation,
         String toStation,
-        LocalDateTime createTime)
+        LocalDateTime createTime,
+        LocalDateTime approveDeadline)
 {
 }

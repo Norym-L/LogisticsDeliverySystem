@@ -23,7 +23,9 @@ public record OrderDetailView(
         Events events,
         String rejectReason,
         String refuseReason,
-        String returnOrderNo)
+        String returnOrderNo,
+        /** 本单若是退回单，指向原单号；普通订单为空 */
+        String originalOrderNo)
 {
     /**
      * 订单级事件时间：下单、批准、签收、拒收。
