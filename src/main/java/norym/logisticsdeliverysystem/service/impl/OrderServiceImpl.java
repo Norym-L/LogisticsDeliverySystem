@@ -1,6 +1,7 @@
 package norym.logisticsdeliverysystem.service.impl;
 
 import norym.logisticsdeliverysystem.dto.CreatedOrderView;
+import norym.logisticsdeliverysystem.dto.FieldLimits;
 import norym.logisticsdeliverysystem.dto.OrderBriefView;
 import norym.logisticsdeliverysystem.dto.OrderDetailView;
 import norym.logisticsdeliverysystem.dto.OrderFormRequest;
@@ -18,6 +19,7 @@ import norym.logisticsdeliverysystem.mapper.DeliveryOrderMapper;
 import norym.logisticsdeliverysystem.mapper.OrderRouteMapper;
 import norym.logisticsdeliverysystem.mapper.StationMapper;
 import norym.logisticsdeliverysystem.service.OrderService;
+import norym.logisticsdeliverysystem.service.PricingService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -46,18 +48,21 @@ public class OrderServiceImpl implements OrderService
     private final DeliveryOrderMapper orderMapper;
     private final OrderRouteMapper routeMapper;
     private final StationMapper stationMapper;
+    private final PricingService pricingService;
     private final int approveTimeoutSeconds;
     private final int maxResubmit;
 
     public OrderServiceImpl(DeliveryOrderMapper orderMapper,
                             OrderRouteMapper routeMapper,
                             StationMapper stationMapper,
+                            PricingService pricingService,
                             @Value("${logistics.approve-timeout-seconds:60}") int approveTimeoutSeconds,
                             @Value("${logistics.max-resubmit:3}") int maxResubmit)
     {
         this.orderMapper = orderMapper;
         this.routeMapper = routeMapper;
         this.stationMapper = stationMapper;
+        this.pricingService = pricingService;
         this.approveTimeoutSeconds = approveTimeoutSeconds;
         this.maxResubmit = maxResubmit;
     }
@@ -74,7 +79,7 @@ public class OrderServiceImpl implements OrderService
         order.setState(OrderState.WAITING);
         order.setApproveDeadline(now.plusSeconds(approveTimeoutSeconds));
         insertWithRetry(order);
-        return new CreatedOrderView(order.getOrderNo(), order.getState().name(), order.getApproveDeadline());
+        return toCreated(order);
     }
 
     /** 取号并插入；极低概率撞号时换一个随机串重试 */
@@ -113,7 +118,11 @@ public class OrderServiceImpl implements OrderService
                     order.getState() == null ? null : order.getState().name(),
                     stationName(stations, order.getFromStationId()),
                     stationName(stations, order.getToStationId()),
-                    order.getCreateTime()));
+                    order.getCreateTime(),
+                    order.getApproveDeadline(),
+                    order.getQuotedPrice(),
+                    order.getPrice(),
+                    order.isPriceConfirmed()));
         }
         return result;
     }
@@ -146,12 +155,20 @@ public class OrderServiceImpl implements OrderService
                 toView(stations, order.getToStationId()),
                 toView(stations, order.getCurrentStationId()),
                 order.getGoodsDesc(), order.getWeight(),
+                order.getVolumeCm3(),
+                order.getActualWeight(),
+                order.getActualVolumeCm3(),
+                order.getQuotedPrice(),
+                order.getPrice(),
+                order.isPriceConfirmed(),
+                order.getPriceConfirmedAt(),
                 trajectory,
                 new OrderDetailView.Events(order.getCreateTime(), order.getApproveTime(),
                         order.getReceiveTime(), order.getRefuseTime()),
                 order.getRejectReason(),
                 order.getRefuseReason(),
-                returnOrder == null ? null : returnOrder.getOrderNo());
+                returnOrder == null ? null : returnOrder.getOrderNo(),
+                order.getReturnOf());
     }
 
     @Override
@@ -215,6 +232,7 @@ public class OrderServiceImpl implements OrderService
         }
 
         String finalReason = isBlank(reason) ? "收件人拒收" : reason.trim();
+        requireMaxLength(finalReason, FieldLimits.REASON, "拒收原因");
         int rows = orderMapper.refuse(orderNo, receiverPhone.trim(), finalReason, LocalDateTime.now());
         if (rows == 0)
         {
@@ -235,6 +253,14 @@ public class OrderServiceImpl implements OrderService
         if (existing.getState() != OrderState.REJECTED)
         {
             throw new ApiException(409, "只有被拒绝的订单可以修改重提");
+        }
+        if (!request.senderPhone().trim().equals(existing.getSenderPhone()))
+        {
+            throw new ApiException(403, "手机号与寄件人不一致");
+        }
+        if (!isBlank(existing.getReturnOf()))
+        {
+            requireSameDirection(existing, request);
         }
         int used = existing.getResubmitCount() == null ? 0 : existing.getResubmitCount();
         if (used >= maxResubmit)
@@ -279,12 +305,16 @@ public class OrderServiceImpl implements OrderService
         back.setToStationId(original.getFromStationId());
         back.setGoodsDesc(original.getGoodsDesc());
         back.setWeight(original.getWeight());
+        back.setVolumeCm3(original.getVolumeCm3());
+        back.setQuotedPrice(estimateQuotedPrice(
+                back.getFromStationId(), back.getToStationId(),
+                back.getWeight(), back.getVolumeCm3()));
         back.setState(OrderState.WAITING);
         back.setApproveDeadline(LocalDateTime.now().plusSeconds(approveTimeoutSeconds));
         back.setReturnOf(original.getOrderNo());
 
         insertWithRetry(back);
-        return new CreatedOrderView(back.getOrderNo(), back.getState().name(), back.getApproveDeadline());
+        return toCreated(back);
     }
 
     private DeliveryOrder requireOrder(String orderNo)
@@ -307,10 +337,14 @@ public class OrderServiceImpl implements OrderService
         {
             throw new ApiException(400, "请求体不能为空");
         }
-        requireText(request.senderName(), "寄件人姓名");
-        requireText(request.receiverName(), "收件人姓名");
+        requireText(request.senderName(), "寄件人姓名", FieldLimits.NAME);
+        requireText(request.receiverName(), "收件人姓名", FieldLimits.NAME);
         requirePhone(request.senderPhone(), "寄件人手机号");
         requirePhone(request.receiverPhone(), "收件人手机号");
+        if (request.goodsDesc() != null && request.goodsDesc().trim().length() > FieldLimits.GOODS)
+        {
+            throw new ApiException(400, "货物描述不能超过 " + FieldLimits.GOODS + " 个字");
+        }
 
         if (request.fromStationId() == null || request.toStationId() == null)
         {
@@ -328,9 +362,27 @@ public class OrderServiceImpl implements OrderService
         {
             throw new ApiException(400, "目的站不存在");
         }
-        if (request.weight() != null && request.weight().compareTo(BigDecimal.ZERO) < 0)
+        if (request.weight() != null)
         {
-            throw new ApiException(400, "重量不能为负");
+            if (request.weight().compareTo(BigDecimal.ZERO) < 0)
+            {
+                throw new ApiException(400, "重量不能为负");
+            }
+            if (request.weight().compareTo(FieldLimits.MAX_WEIGHT) > 0)
+            {
+                throw new ApiException(400, "重量超出范围");
+            }
+        }
+        if (request.volumeCm3() != null)
+        {
+            if (request.volumeCm3().compareTo(BigDecimal.ZERO) < 0)
+            {
+                throw new ApiException(400, "体积不能为负");
+            }
+            if (request.volumeCm3().compareTo(FieldLimits.MAX_VOLUME) > 0)
+            {
+                throw new ApiException(400, "体积超出范围");
+            }
         }
     }
 
@@ -342,16 +394,80 @@ public class OrderServiceImpl implements OrderService
         order.setReceiverPhone(request.receiverPhone().trim());
         order.setFromStationId(request.fromStationId());
         order.setToStationId(request.toStationId());
-        order.setGoodsDesc(request.goodsDesc());
+        order.setGoodsDesc(isBlank(request.goodsDesc()) ? null : request.goodsDesc().trim());
         order.setWeight(request.weight());
+        order.setVolumeCm3(request.volumeCm3());
+        order.setQuotedPrice(estimateQuotedPrice(
+                request.fromStationId(), request.toStationId(),
+                request.weight(), request.volumeCm3()));
     }
 
-    private void requireText(String value, String field)
+    /**
+     * 质量和体积都大于 0 时，按最短路给出预估价；只填其中一项则不算价。
+     */
+    private BigDecimal estimateQuotedPrice(Long fromStationId, Long toStationId,
+                                           BigDecimal weight, BigDecimal volumeCm3)
+    {
+        if (weight == null || volumeCm3 == null)
+        {
+            return null;
+        }
+        if (weight.compareTo(BigDecimal.ZERO) <= 0 || volumeCm3.compareTo(BigDecimal.ZERO) <= 0)
+        {
+            return null;
+        }
+        return pricingService.quoteShortest(fromStationId, toStationId, weight, volumeCm3).freight();
+    }
+
+    private CreatedOrderView toCreated(DeliveryOrder order)
+    {
+        return new CreatedOrderView(
+                order.getOrderNo(),
+                order.getState() == null ? null : order.getState().name(),
+                order.getApproveDeadline(),
+                order.getVolumeCm3(),
+                order.getQuotedPrice(),
+                order.getPrice(),
+                order.isPriceConfirmed());
+    }
+
+    /** 退回单的收发件人和起止站必须保持对调结果，只允许改货物信息 */
+    private void requireSameDirection(DeliveryOrder existing, OrderFormRequest request)
+    {
+        boolean same = sameText(existing.getSenderName(), request.senderName())
+                && sameText(existing.getSenderPhone(), request.senderPhone())
+                && sameText(existing.getReceiverName(), request.receiverName())
+                && sameText(existing.getReceiverPhone(), request.receiverPhone())
+                && existing.getFromStationId().equals(request.fromStationId())
+                && existing.getToStationId().equals(request.toStationId());
+        if (!same)
+        {
+            throw new ApiException(400, "退回单不能修改收发件人和起止站");
+        }
+    }
+
+    private void requireText(String value, String field, int max)
     {
         if (isBlank(value))
         {
             throw new ApiException(400, field + "不能为空");
         }
+        requireMaxLength(value.trim(), max, field);
+    }
+
+    private void requireMaxLength(String value, int max, String field)
+    {
+        if (value != null && value.length() > max)
+        {
+            throw new ApiException(400, field + "不能超过 " + max + " 个字");
+        }
+    }
+
+    private boolean sameText(String left, String right)
+    {
+        String a = left == null ? "" : left.trim();
+        String b = right == null ? "" : right.trim();
+        return a.equals(b);
     }
 
     private void requirePhone(String phone, String field)

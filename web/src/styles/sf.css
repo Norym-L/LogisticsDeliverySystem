@@ -1,0 +1,730 @@
+/* SF-style light palette for every portal (loaded after tysha.css).
+   Colors sampled from sf-express.com stylesheets: red #DC1E32, ink #0F0F0F / #333,
+   grey #7E8388, page #F7F8FA, rules #E4E4E4 / #D8D8D8, success #26AB33.
+   Borrowed palette only — this is 通驿, not an SF product. */
+
+html[data-theme="sf"] {
+  color-scheme: light;
+  accent-color: #dc1e32;
+
+  --sf-red: #dc1e32;
+  --sf-red-dark: #b8172a;
+  --sf-red-soft: #fdecee;
+  --sf-ink: #0f0f0f;
+  --sf-text: #333333;
+  --sf-muted: #5f5f5f;
+  --sf-grey: #7e8388;
+  --sf-line: #e4e4e4;
+  --sf-line-strong: #d8d8d8;
+  --sf-page: #f7f8fa;
+  --sf-side: #141414;
+
+  /* Remap the layout tokens so tysha.css rules render light. */
+  --tysha-ink: #ffffff;
+  --tysha-ink-deep: #f7f8fa;
+  --tysha-raised: #ffffff;
+  --tysha-stone: #e4e4e4;
+  --tysha-bone: #0f0f0f;
+  --tysha-soft: #333333;
+  --tysha-muted: #5f5f5f;
+  --tysha-muted-2: #5f5f5f;
+  --tysha-muted-3: #7e8388;
+  --tysha-muted-4: #a9a9a9;
+  --tysha-brass: #dc1e32;
+  --tysha-gold: #b8172a;
+  --tysha-coral: #dc1e32;
+  --tysha-line: #e4e4e4;
+  --tysha-line-strong: #d8d8d8;
+  --tysha-serif: "Inter Tight", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --tysha-sans: "Inter Tight", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+
+  --milk-scroll-track: #f7f8fa;
+  --milk-scroll-thumb: #c4c4c4;
+  --milk-scroll-thumb-hover: #a9a9a9;
+  --milk-scroll-thumb-active: #7e8388;
+}
+
+html[data-theme="sf"] body {
+  background: #ffffff;
+  color: var(--sf-text);
+}
+
+html[data-theme="sf"] ::selection {
+  background: rgba(220, 30, 50, 0.18);
+  color: var(--sf-ink);
+}
+
+/* ---------- Headings: clean sans, bold ---------- */
+html[data-theme="sf"] h1,
+html[data-theme="sf"] h2,
+html[data-theme="sf"] .page-head h1,
+html[data-theme="sf"] .login-card h1,
+html[data-theme="sf"] .empty strong,
+html[data-theme="sf"] .form-split legend,
+html[data-theme="sf"] .fare-panel h2,
+html[data-theme="sf"] .detail-block h2 {
+  font-family: var(--tysha-sans);
+  font-weight: 700;
+  letter-spacing: 0;
+  color: var(--sf-ink);
+}
+
+html[data-theme="sf"] .page-head h1 {
+  font-size: 30px;
+  line-height: 1.25;
+}
+
+html[data-theme="sf"] .pane-detail h2,
+html[data-theme="sf"] .detail-block h2,
+html[data-theme="sf"] .fare-panel h2 {
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+html[data-theme="sf"] .form-split legend {
+  font-size: 16px;
+  padding-left: 10px;
+  border-left: 3px solid var(--sf-red);
+  line-height: 1.1;
+}
+
+html[data-theme="sf"] .empty strong {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+html[data-theme="sf"] .page-head p,
+html[data-theme="sf"] .empty span,
+html[data-theme="sf"] .fare-note {
+  color: var(--sf-muted);
+}
+
+html[data-theme="sf"] .page-index {
+  color: var(--sf-grey);
+}
+
+/* ---------- Page canvas: grey page, white work panes ---------- */
+html[data-theme="sf"] .app {
+  background: var(--sf-page);
+}
+
+html[data-theme="sf"] .main {
+  background: var(--sf-page);
+}
+
+html[data-theme="sf"] .workspace {
+  border: 1px solid var(--sf-line);
+  border-radius: 6px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+html[data-theme="sf"] .pane-list {
+  padding: 16px 20px 32px;
+  background: #ffffff;
+}
+
+html[data-theme="sf"] .pane-detail {
+  top: 0;
+  padding: 20px 28px 32px;
+  background: #ffffff;
+}
+
+/* ---------- Sidebar: SF-style black bar, white text ---------- */
+html[data-theme="sf"] .sidebar,
+html[data-theme="sf"] .sidebar.panel,
+html[data-theme="sf"] .sidebar.panel.rise {
+  background: var(--sf-side);
+  border-right: none;
+  color: #ffffff;
+}
+
+html[data-theme="sf"] .brand-text strong {
+  font-family: var(--tysha-sans);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #ffffff;
+}
+
+html[data-theme="sf"] .brand-text small {
+  color: #c4c4c4;
+}
+
+html[data-theme="sf"] .sidebar .brand-text strong::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 22px;
+  margin-right: 10px;
+  vertical-align: -2px;
+  background: var(--sf-red);
+}
+
+html[data-theme="sf"] .nav-item {
+  padding: 12px 0 12px 14px;
+  border-left: 3px solid transparent;
+  color: #d8d8d8;
+}
+
+html[data-theme="sf"] .nav-item:hover {
+  color: #ffffff;
+}
+
+html[data-theme="sf"] .nav-item.is-active,
+html[data-theme="sf"] .nav-item.router-link-active {
+  color: #ffffff;
+  border-left: 3px solid var(--sf-red);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+html[data-theme="sf"] .nav-label {
+  font-weight: 500;
+}
+
+html[data-theme="sf"] .nav-item.is-active .nav-label {
+  box-shadow: none;
+  font-weight: 600;
+}
+
+html[data-theme="sf"] .nav-hint,
+html[data-theme="sf"] .nav-item.is-active .nav-hint,
+html[data-theme="sf"] .nav-item:hover .nav-hint {
+  color: #afafaf;
+}
+
+html[data-theme="sf"] .who {
+  border-top: 1px solid #333333;
+}
+
+html[data-theme="sf"] .who-text strong {
+  color: #ffffff;
+}
+
+html[data-theme="sf"] .who-text small {
+  color: #c4c4c4;
+}
+
+html[data-theme="sf"] .sidebar button.ghost {
+  background: transparent;
+  border-color: #575757;
+  color: #ffffff;
+}
+
+html[data-theme="sf"] .sidebar button.ghost:hover {
+  border-color: var(--sf-red);
+  color: #ffffff;
+  background: var(--sf-red);
+}
+
+/* ---------- Buttons: 4px radius, red primary ---------- */
+html[data-theme="sf"] button,
+html[data-theme="sf"] :where(button:not([data-slot])),
+html[data-theme="sf"] .pill {
+  border-radius: 4px;
+  border: 1px solid var(--sf-line-strong);
+  background: #ffffff;
+  color: var(--sf-text);
+  font-weight: 500;
+}
+
+html[data-theme="sf"] button:hover,
+html[data-theme="sf"] :where(button:not([data-slot])):hover,
+html[data-theme="sf"] .pill:hover {
+  background: #ffffff;
+  border-color: var(--sf-red);
+  color: var(--sf-red);
+}
+
+html[data-theme="sf"] button:active,
+html[data-theme="sf"] :is(button, a.pill, [data-milk-press-target])[data-milk-press] {
+  background: #ffffff;
+}
+
+html[data-theme="sf"] button.ghost {
+  background: #ffffff;
+  border-color: var(--sf-line-strong);
+  color: var(--sf-text);
+}
+
+html[data-theme="sf"] button.ghost:hover {
+  background: #ffffff;
+  border-color: var(--sf-red);
+  color: var(--sf-red);
+}
+
+html[data-theme="sf"] button.small:not(.ghost):not(.danger),
+html[data-theme="sf"] .login-form button[type="submit"],
+html[data-theme="sf"] button[type="submit"]:not(.ghost):not(.danger) {
+  background: var(--sf-red);
+  border-color: var(--sf-red);
+  color: #ffffff;
+}
+
+html[data-theme="sf"] button.small:not(.ghost):not(.danger):hover,
+html[data-theme="sf"] .login-form button[type="submit"]:hover,
+html[data-theme="sf"] button[type="submit"]:not(.ghost):not(.danger):hover {
+  background: var(--sf-red-dark);
+  border-color: var(--sf-red-dark);
+  color: #ffffff;
+}
+
+html[data-theme="sf"] button:disabled,
+html[data-theme="sf"] button:disabled:hover {
+  opacity: 0.5;
+  background: #ffffff;
+  color: var(--sf-grey);
+  border-color: var(--sf-line-strong);
+}
+
+html[data-theme="sf"] button.small:not(.ghost):not(.danger):disabled,
+html[data-theme="sf"] button.small:not(.ghost):not(.danger):disabled:hover,
+html[data-theme="sf"] .login-form button[type="submit"]:disabled,
+html[data-theme="sf"] .login-form button[type="submit"]:disabled:hover {
+  background: var(--sf-red);
+  border-color: var(--sf-red);
+  color: #ffffff;
+  opacity: 0.45;
+}
+
+html[data-theme="sf"] button.danger,
+html[data-theme="sf"] button.small.danger {
+  background: #ffffff;
+  border-color: var(--sf-red);
+  color: var(--sf-red);
+}
+
+html[data-theme="sf"] button.danger:hover,
+html[data-theme="sf"] button.small.danger:hover {
+  background: var(--sf-red-soft);
+  color: var(--sf-red-dark);
+  border-color: var(--sf-red-dark);
+}
+
+/* ---------- Fields: boxed inputs ---------- */
+html[data-theme="sf"] input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="hidden"]):not([type="color"]):not([type="image"]),
+html[data-theme="sf"] textarea,
+html[data-theme="sf"] select,
+html[data-theme="sf"] .field input,
+html[data-theme="sf"] .field textarea,
+html[data-theme="sf"] .field select,
+html[data-theme="sf"] .filters input,
+html[data-theme="sf"] .filters select,
+html[data-theme="sf"] .stop-editor select {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--sf-line-strong);
+  border-radius: 4px;
+  background-color: #ffffff;
+  color: var(--sf-ink);
+  font-size: 15px;
+}
+
+html[data-theme="sf"] select,
+html[data-theme="sf"] .field select,
+html[data-theme="sf"] .filters select,
+html[data-theme="sf"] .stop-editor select {
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='none' stroke='%237E8388' stroke-width='1.4' d='M1 1l5 5 5-5'/></svg>");
+  background-position: right 12px center;
+}
+
+html[data-theme="sf"] input:focus,
+html[data-theme="sf"] input:focus-visible,
+html[data-theme="sf"] textarea:focus,
+html[data-theme="sf"] select:focus,
+html[data-theme="sf"] :where(input, textarea, select):is(:focus, :focus-visible) {
+  border: 1px solid var(--sf-red);
+  box-shadow: 0 0 0 3px rgba(220, 30, 50, 0.12) !important;
+}
+
+html[data-theme="sf"] input:disabled,
+html[data-theme="sf"] select:disabled,
+html[data-theme="sf"] textarea:disabled {
+  background-color: var(--sf-page);
+  color: var(--sf-grey);
+}
+
+html[data-theme="sf"] input::placeholder,
+html[data-theme="sf"] textarea::placeholder {
+  font-family: var(--tysha-sans);
+  font-style: normal;
+  font-size: 14px;
+  color: #a9a9a9;
+}
+
+html[data-theme="sf"] .field label,
+html[data-theme="sf"] .filters .hint,
+html[data-theme="sf"] label.hint {
+  color: var(--sf-text);
+  font-weight: 500;
+}
+
+html[data-theme="sf"] .hint,
+html[data-theme="sf"] small,
+html[data-theme="sf"] .muted {
+  color: var(--sf-muted);
+}
+
+html[data-theme="sf"] .error {
+  color: var(--sf-red);
+}
+
+/* ---------- Lists ---------- */
+html[data-theme="sf"] .card,
+html[data-theme="sf"] .card.rise,
+html[data-theme="sf"] .card.clickable,
+html[data-theme="sf"] .task,
+html[data-theme="sf"] .pm-card {
+  background: #ffffff;
+  border-bottom: 1px solid var(--sf-line);
+}
+
+html[data-theme="sf"] .card.clickable:hover,
+html[data-theme="sf"] .task.clickable:hover,
+html[data-theme="sf"] .pm-card:hover {
+  background: var(--sf-page);
+}
+
+html[data-theme="sf"] .order-row.is-selected,
+html[data-theme="sf"] .person.is-selected,
+html[data-theme="sf"] .card.clickable.is-selected,
+html[data-theme="sf"] .task.is-selected,
+html[data-theme="sf"] .pm-card.is-selected {
+  background: var(--sf-red-soft);
+  box-shadow: inset 3px 0 0 var(--sf-red);
+}
+
+html[data-theme="sf"] .route-line,
+html[data-theme="sf"] .task b,
+html[data-theme="sf"] .pm-name,
+html[data-theme="sf"] .person-name strong {
+  font-family: var(--tysha-sans);
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--sf-ink);
+}
+
+html[data-theme="sf"] .pane-list .route-line {
+  font-size: 16px;
+}
+
+html[data-theme="sf"] .pm-name {
+  font-size: 16px;
+}
+
+html[data-theme="sf"] .route-line .arrow {
+  color: var(--sf-red);
+}
+
+html[data-theme="sf"] .meta,
+html[data-theme="sf"] .task small,
+html[data-theme="sf"] .pm-line2,
+html[data-theme="sf"] .pane-count {
+  color: var(--sf-muted);
+}
+
+html[data-theme="sf"] .meta b {
+  color: var(--sf-text);
+}
+
+html[data-theme="sf"] .pm-avatar,
+html[data-theme="sf"] .avatar {
+  font-family: var(--tysha-sans);
+  font-weight: 600;
+  background: var(--sf-page);
+  border-color: var(--sf-line-strong);
+  color: var(--sf-text);
+}
+
+html[data-theme="sf"] .pm-counts b,
+html[data-theme="sf"] .person-stats b {
+  font-family: var(--tysha-sans);
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--sf-ink);
+}
+
+html[data-theme="sf"] .bucket-tag {
+  border-color: var(--sf-red);
+  color: var(--sf-red);
+  background: var(--sf-red-soft);
+}
+
+/* ---------- Status badges: tinted fills ---------- */
+html[data-theme="sf"] .badge,
+html[data-theme="sf"] .badge.tone-wait,
+html[data-theme="sf"] .badge.tone-run,
+html[data-theme="sf"] .badge.tone-ok,
+html[data-theme="sf"] .badge.tone-bad {
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-weight: 600;
+}
+
+html[data-theme="sf"] .tone-wait,
+html[data-theme="sf"] .badge.tone-wait {
+  color: #b45309;
+  background: #fff4e5;
+  border-color: #f5c48a;
+}
+
+html[data-theme="sf"] .tone-run,
+html[data-theme="sf"] .badge.tone-run {
+  color: #1d5fc4;
+  background: #eaf2ff;
+  border-color: #a9c6f5;
+}
+
+html[data-theme="sf"] .tone-ok,
+html[data-theme="sf"] .badge.tone-ok {
+  color: #1d7f27;
+  background: #e9f7eb;
+  border-color: #9fd6a5;
+}
+
+html[data-theme="sf"] .tone-bad,
+html[data-theme="sf"] .badge.tone-bad {
+  color: var(--sf-red);
+  background: var(--sf-red-soft);
+  border-color: #f2a9b1;
+}
+
+/* ---------- Tabs ---------- */
+html[data-theme="sf"] .tabs button {
+  border: none;
+  background: transparent;
+  color: var(--sf-muted);
+  font-size: 14px;
+}
+
+html[data-theme="sf"] .tabs button:hover {
+  color: var(--sf-red);
+  border: none;
+  background: transparent;
+}
+
+html[data-theme="sf"] .tabs button.is-on {
+  color: var(--sf-red);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--sf-red);
+}
+
+/* ---------- Detail, fare, route rail ---------- */
+html[data-theme="sf"] .kv span {
+  color: var(--sf-grey);
+}
+
+html[data-theme="sf"] .kv b {
+  color: var(--sf-ink);
+  font-weight: 500;
+}
+
+html[data-theme="sf"] .fare-panel {
+  padding: 18px 20px;
+  border: 1px solid var(--sf-line);
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+html[data-theme="sf"] .fare-rows span,
+html[data-theme="sf"] .fare-total span {
+  color: var(--sf-muted);
+}
+
+html[data-theme="sf"] .fare-rows b {
+  color: var(--sf-ink);
+}
+
+html[data-theme="sf"] .fare-total b {
+  font-family: var(--tysha-sans);
+  font-weight: 700;
+  letter-spacing: 0;
+  font-size: 40px;
+  color: var(--sf-red);
+}
+
+html[data-theme="sf"] .rail::before {
+  background: var(--sf-line-strong);
+  opacity: 1;
+  width: 2px;
+}
+
+html[data-theme="sf"] .stop::before {
+  background: #ffffff;
+  border: 2px solid var(--sf-red);
+}
+
+html[data-theme="sf"] .stop.is-last::before {
+  background: var(--sf-red);
+  border-color: var(--sf-red);
+}
+
+html[data-theme="sf"] .stop span {
+  color: var(--sf-ink);
+}
+
+html[data-theme="sf"] .stop small {
+  color: var(--sf-grey);
+}
+
+html[data-theme="sf"] .empty svg {
+  color: #c4c4c4;
+  opacity: 1;
+}
+
+html[data-theme="sf"] .toast {
+  background: var(--sf-ink);
+  color: #ffffff;
+  border-color: var(--sf-ink);
+  border-radius: 4px;
+}
+
+html[data-theme="sf"] a:hover {
+  color: var(--sf-red);
+}
+
+/* ---------- Login: white form + black brand block ---------- */
+html[data-theme="sf"] .login-wrap {
+  grid-template-columns: minmax(0, 30rem) minmax(0, 1fr);
+  gap: 0 6vw;
+  padding: 0 0 0 8vw;
+  background: #ffffff;
+}
+
+html[data-theme="sf"] .login-wrap::before {
+  content: "通驿\A寄件 · 审批 · 派送";
+  white-space: pre;
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  align-items: flex-end;
+  width: auto;
+  height: 100vh;
+  padding: 0 56px 72px;
+  box-sizing: border-box;
+  opacity: 1;
+  background:
+    linear-gradient(var(--sf-red), var(--sf-red)) left 56px bottom 180px / 48px 6px no-repeat,
+    var(--sf-side);
+  color: #ffffff;
+  font-family: var(--tysha-sans);
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 0.04em;
+}
+
+html[data-theme="sf"] .login-card,
+html[data-theme="sf"] .login-card.rise {
+  grid-column: 1;
+  grid-row: 1;
+  margin: 10vh 0 0 0;
+  background: #ffffff;
+}
+
+html[data-theme="sf"] .login-card .brand-text strong {
+  color: var(--sf-ink);
+}
+
+html[data-theme="sf"] .login-card .brand-text strong::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 22px;
+  margin-right: 10px;
+  vertical-align: -2px;
+  background: var(--sf-red);
+}
+
+html[data-theme="sf"] .login-card .brand-text small {
+  color: var(--sf-muted);
+}
+
+html[data-theme="sf"] .login-card h1 {
+  font-size: 36px;
+  line-height: 1.3;
+}
+
+html[data-theme="sf"] .login-card > p {
+  color: var(--sf-muted);
+}
+
+html[data-theme="sf"] .login-form button[type="submit"] {
+  min-width: 100%;
+  align-self: stretch;
+}
+
+html[data-theme="sf"] .login-card .hint {
+  color: var(--sf-muted);
+}
+
+html[data-theme="sf"] .login-card .hint a {
+  color: var(--sf-text);
+}
+
+html[data-theme="sf"] .login-card .hint a:hover {
+  color: var(--sf-red);
+}
+
+@media (max-width: 1100px) {
+  html[data-theme="sf"] .login-wrap {
+    display: block;
+    padding: 0 32px;
+  }
+
+  html[data-theme="sf"] .login-wrap::before {
+    display: none;
+  }
+}
+
+@media (max-width: 960px) {
+  html[data-theme="sf"] .pane-list {
+    border-bottom: 1px solid var(--sf-line);
+  }
+}
+
+/* ---------- tuning after first light pass ---------- */
+html[data-theme="sf"] .login-wrap::before {
+  justify-self: stretch;
+  width: 100%;
+  background:
+    linear-gradient(var(--sf-red), var(--sf-red)) left 56px bottom 212px / 48px 6px no-repeat,
+    var(--sf-side);
+}
+
+html[data-theme="sf"] .workspace {
+  align-items: stretch;
+}
+
+html[data-theme="sf"] .pane-detail {
+  position: static;
+}
+
+html[data-theme="sf"] .form-split legend {
+  margin-bottom: 10px;
+}
+
+html[data-theme="sf"] .pm-card {
+  gap: 10px;
+  padding: 12px 8px 12px 10px;
+}
+
+html[data-theme="sf"] .pm-counts {
+  gap: 8px;
+  padding-left: 10px;
+}
+
+html[data-theme="sf"] .pm-counts div {
+  min-width: 24px;
+}
+
+html[data-theme="sf"] .pm-line2 {
+  font-size: 12px;
+  letter-spacing: -0.01em;
+}
+
+html[data-theme="sf"] .pane-detail .detail-block .kv {
+  border-bottom: none;
+  padding-bottom: 0;
+}

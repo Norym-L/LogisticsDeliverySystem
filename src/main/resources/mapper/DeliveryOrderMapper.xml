@@ -6,9 +6,11 @@
     <insert id="insert" parameterType="DeliveryOrder" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO delivery_order (order_no, sender_name, sender_phone, receiver_name, receiver_phone,
                                     from_station_id, to_station_id, goods_desc, weight,
+                                    volume_cm3, quoted_price,
                                     state, approve_deadline, return_of)
         VALUES (#{orderNo}, #{senderName}, #{senderPhone}, #{receiverName}, #{receiverPhone},
                 #{fromStationId}, #{toStationId}, #{goodsDesc}, #{weight},
+                #{volumeCm3}, #{quotedPrice},
                 #{state}, #{approveDeadline}, #{returnOf})
     </insert>
 
@@ -71,6 +73,13 @@
             to_station_id      = #{order.toStationId},
             goods_desc         = #{order.goodsDesc},
             weight             = #{order.weight},
+            volume_cm3         = #{order.volumeCm3},
+            quoted_price       = #{order.quotedPrice},
+            actual_volume_cm3  = NULL,
+            actual_weight      = NULL,
+            price              = NULL,
+            price_confirmed_at = NULL,
+            price_confirmed_by = NULL,
             state              = 'WAITING',
             reject_reason      = NULL,
             current_seq        = NULL,
@@ -92,6 +101,82 @@
         WHERE state = 'WAITING'
           AND approve_deadline &lt; #{now}
     </update>
+
+    <sql id="inboxColumns">
+        o.order_no              AS orderNo,
+        o.state                 AS state,
+        fs.name                 AS fromStation,
+        ts.name                 AS toStation,
+        ns.name                 AS nextStation,
+        o.current_seq           AS currentSeq,
+        o.forward_station_count AS forwardStationCount,
+        nr.arrive_trip_no       AS tripNo,
+        o.goods_desc            AS goodsDesc,
+        o.receiver_name         AS receiverName,
+        o.receiver_phone        AS receiverPhone,
+        o.create_time           AS createTime
+    </sql>
+
+    <!-- 待发运：货在本站，下一段还没到，本站尚未发车 -->
+    <select id="findPendingDepart" resultType="norym.logisticsdeliverysystem.dto.StationInboxItem">
+        SELECT 'DEPART' AS bucket,
+               <include refid="inboxColumns"/>
+        FROM delivery_order o
+                 JOIN order_route cr ON cr.order_id = o.id AND cr.seq = o.current_seq
+                 JOIN order_route nr ON nr.order_id = o.id AND nr.seq = o.current_seq + 1
+                 JOIN station fs ON fs.id = o.from_station_id
+                 JOIN station ts ON ts.id = o.to_station_id
+                 JOIN station ns ON ns.id = nr.station_id
+        WHERE o.current_station_id = #{stationId}
+          AND o.state IN ('APPROVED', 'SENDING')
+          AND nr.status = 'PENDING'
+          AND cr.depart_time IS NULL
+        ORDER BY o.create_time
+    </select>
+
+    <!-- 待到货：下一段落到本站，且上一站已经发运 -->
+    <select id="findPendingArrive" resultType="norym.logisticsdeliverysystem.dto.StationInboxItem">
+        SELECT 'ARRIVE' AS bucket,
+               <include refid="inboxColumns"/>
+        FROM delivery_order o
+                 JOIN order_route nr ON nr.order_id = o.id AND nr.station_id = #{stationId} AND nr.status = 'PENDING'
+                 JOIN order_route cr ON cr.order_id = o.id AND cr.seq = nr.seq - 1
+                 JOIN station fs ON fs.id = o.from_station_id
+                 JOIN station ts ON ts.id = o.to_station_id
+                 JOIN station ns ON ns.id = nr.station_id
+        WHERE o.state = 'SENDING'
+          AND o.current_seq = cr.seq
+          AND cr.depart_time IS NOT NULL
+        ORDER BY o.create_time
+    </select>
+
+    <!-- 待派单：已到目的站，仍在等快递员 -->
+    <select id="findPendingDispatch" resultType="norym.logisticsdeliverysystem.dto.StationInboxItem">
+        SELECT 'DISPATCH' AS bucket,
+               o.order_no              AS orderNo,
+               o.state                 AS state,
+               fs.name                 AS fromStation,
+               ts.name                 AS toStation,
+               NULL                    AS nextStation,
+               o.current_seq           AS currentSeq,
+               o.forward_station_count AS forwardStationCount,
+               dest.arrive_trip_no     AS tripNo,
+               o.goods_desc            AS goodsDesc,
+               o.receiver_name         AS receiverName,
+               o.receiver_phone        AS receiverPhone,
+               o.create_time           AS createTime
+        FROM delivery_order o
+                 JOIN order_route dest ON dest.order_id = o.id AND dest.seq = o.forward_station_count
+                 JOIN station fs ON fs.id = o.from_station_id
+                 JOIN station ts ON ts.id = o.to_station_id
+        WHERE o.to_station_id = #{stationId}
+          AND o.current_station_id = #{stationId}
+          AND o.current_seq = o.forward_station_count
+          AND o.state = 'SENDING'
+          AND dest.postman_id IS NULL
+          AND dest.status = 'ARRIVED'
+        ORDER BY o.create_time
+    </select>
 
     <select id="findByState" resultType="DeliveryOrder">
         SELECT *
@@ -147,6 +232,18 @@
             version = version + 1
         WHERE order_no = #{orderNo}
           AND state = #{from}
+    </update>
+
+    <update id="confirmPrice">
+        UPDATE delivery_order
+        SET actual_volume_cm3  = #{volumeCm3},
+            actual_weight      = #{weightKg},
+            price              = #{price},
+            price_confirmed_at = #{now},
+            price_confirmed_by = #{postmanId},
+            version            = version + 1
+        WHERE order_no = #{orderNo}
+          AND state IN ('SENDING', 'DELIVERING')
     </update>
 
 </mapper>

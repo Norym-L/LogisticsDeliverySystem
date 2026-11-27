@@ -47,6 +47,15 @@ public interface DeliveryOrderMapper
     /** 按状态查列表，管理端"待审批请求"用 */
     List<DeliveryOrder> findByState(@Param("state") OrderState state);
 
+    /** 本站待发运：当前站是本站，下一段尚未到达，本站还没写出发车时间 */
+    List<norym.logisticsdeliverysystem.dto.StationInboxItem> findPendingDepart(@Param("stationId") Long stationId);
+
+    /** 本站待到货：下一段的站是本站，且上一段已经发运 */
+    List<norym.logisticsdeliverysystem.dto.StationInboxItem> findPendingArrive(@Param("stationId") Long stationId);
+
+    /** 本站待派单：货已到目的站，仍是运送中，还没有快递员 */
+    List<norym.logisticsdeliverysystem.dto.StationInboxItem> findPendingDispatch(@Param("stationId") Long stationId);
+
     /** 批准：只认 WAITING，同时写入路线站数与起点位置 */
     int approve(@Param("orderNo") String orderNo,
                 @Param("operatorId") Long operatorId,
@@ -72,4 +81,14 @@ public interface DeliveryOrderMapper
     int transition(@Param("orderNo") String orderNo,
                    @Param("from") OrderState from,
                    @Param("to") OrderState to);
+
+    /**
+     * 写入实测体积、质量与最终运费。只允许待取件或派送中的订单改价。
+     */
+    int confirmPrice(@Param("orderNo") String orderNo,
+                     @Param("volumeCm3") java.math.BigDecimal volumeCm3,
+                     @Param("weightKg") java.math.BigDecimal weightKg,
+                     @Param("price") java.math.BigDecimal price,
+                     @Param("now") LocalDateTime now,
+                     @Param("postmanId") Long postmanId);
 }

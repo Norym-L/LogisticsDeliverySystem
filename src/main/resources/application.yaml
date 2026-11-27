@@ -21,12 +21,23 @@ mybatis:
     default-enum-type-handler: org.apache.ibatis.type.EnumTypeHandler
 
 logistics:
-  # 审批超时时间。演示时改成 15，答辩现场能看到自动拒绝
-  approve-timeout-seconds: 60
+  # 审批超时。默认 10 分钟，方便走完多站演示；要现场看自动拒绝时改成 15
+  approve-timeout-seconds: 600
   # 超时扫描间隔
   approve-scan-interval-ms: 5000
   # 被拒后允许重提的最大次数
   max-resubmit: 3
+  pricing:
+    volumetric-divisor: 6000
+    tiers:
+      - max-km: 200
+        first-kg-price: 18
+        additional-kg-price: 5
+      - max-km: 1000
+        first-kg-price: 22
+        additional-kg-price: 8
+      - first-kg-price: 23
+        additional-kg-price: 10
 
 logging:
   level:

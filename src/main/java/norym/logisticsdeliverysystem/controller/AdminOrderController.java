@@ -8,10 +8,13 @@ import norym.logisticsdeliverysystem.dto.ApproveRequest;
 import norym.logisticsdeliverysystem.dto.AssignCourierRequest;
 import norym.logisticsdeliverysystem.dto.AssignTripRequest;
 import norym.logisticsdeliverysystem.dto.OrderBriefView;
+import norym.logisticsdeliverysystem.dto.OrderDetailView;
 import norym.logisticsdeliverysystem.dto.RejectRequest;
 import norym.logisticsdeliverysystem.dto.RoutePlanView;
+import norym.logisticsdeliverysystem.dto.StationInboxItem;
 import norym.logisticsdeliverysystem.exception.ApiException;
 import norym.logisticsdeliverysystem.service.AdminOrderService;
+import norym.logisticsdeliverysystem.service.OrderService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,10 +36,12 @@ import java.util.List;
 public class AdminOrderController
 {
     private final AdminOrderService adminOrderService;
+    private final OrderService orderService;
 
-    public AdminOrderController(AdminOrderService adminOrderService)
+    public AdminOrderController(AdminOrderService adminOrderService, OrderService orderService)
     {
         this.adminOrderService = adminOrderService;
+        this.orderService = orderService;
     }
 
     /** 检查请求：待审批订单列表 */
@@ -46,6 +51,24 @@ public class AdminOrderController
     {
         requireRole(user, Role.PATH_ADMIN);
         return ApiResult.ok(adminOrderService.pending());
+    }
+
+    /** 节点管理员本站待办 */
+    @GetMapping("/inbox")
+    public ApiResult<List<StationInboxItem>> inbox(
+            @SessionAttribute(name = AuthService.SESSION_KEY, required = false) SessionUser user)
+    {
+        requireRole(user, Role.STATION_ADMIN);
+        return ApiResult.ok(adminOrderService.inbox(user.stationId()));
+    }
+
+    /** 按单号查看订单详情，批准之后也能回看路线和状态 */
+    @GetMapping("/{orderNo}")
+    public ApiResult<OrderDetailView> detail(@PathVariable("orderNo") String orderNo,
+                                             @SessionAttribute(name = AuthService.SESSION_KEY, required = false) SessionUser user)
+    {
+        requireStaff(user);
+        return ApiResult.ok(orderService.detail(orderNo));
     }
 
     /** 系统推荐的最短路线 */
@@ -118,6 +141,18 @@ public class AdminOrderController
         requireRole(user, Role.STATION_ADMIN);
         adminOrderService.arrive(orderNo, user.stationId());
         return ApiResult.ok();
+    }
+
+    private void requireStaff(SessionUser user)
+    {
+        if (user == null)
+        {
+            throw new ApiException(401, "请先登录");
+        }
+        if (user.role() != Role.PATH_ADMIN && user.role() != Role.STATION_ADMIN)
+        {
+            throw new ApiException(403, "该操作仅限管理员");
+        }
     }
 
     private void requireRole(SessionUser user, Role expected)

@@ -1,7 +1,9 @@
 package norym.logisticsdeliverysystem.service.impl;
 
+import norym.logisticsdeliverysystem.dto.FieldLimits;
 import norym.logisticsdeliverysystem.dto.OrderBriefView;
 import norym.logisticsdeliverysystem.dto.RoutePlanView;
+import norym.logisticsdeliverysystem.dto.StationInboxItem;
 import norym.logisticsdeliverysystem.entity.DeliveryOrder;
 import norym.logisticsdeliverysystem.entity.OrderRoute;
 import norym.logisticsdeliverysystem.entity.OrderState;
@@ -57,7 +59,11 @@ public class AdminOrderServiceImpl implements AdminOrderService
                     order.getState().name(),
                     stationName(stations, order.getFromStationId()),
                     stationName(stations, order.getToStationId()),
-                    order.getCreateTime()));
+                    order.getCreateTime(),
+                    order.getApproveDeadline(),
+                    order.getQuotedPrice(),
+                    order.getPrice(),
+                    order.isPriceConfirmed()));
         }
         return result;
     }
@@ -121,6 +127,10 @@ public class AdminOrderServiceImpl implements AdminOrderService
             throw new ApiException(409, "只有待审批的订单可以拒绝，当前状态：" + order.getState());
         }
         String finalReason = reason == null || reason.isBlank() ? "管理员拒绝" : reason.trim();
+        if (finalReason.length() > FieldLimits.REASON)
+        {
+            throw new ApiException(400, "拒绝原因不能超过 " + FieldLimits.REASON + " 个字");
+        }
         if (orderMapper.reject(orderNo, finalReason) == 0)
         {
             throw new ApiException(409, "拒绝失败，订单状态已变化");
@@ -146,8 +156,13 @@ public class AdminOrderServiceImpl implements AdminOrderService
         {
             throw new ApiException(400, "车次不能为空");
         }
+        String trip = tripNo.trim();
+        if (trip.length() > FieldLimits.TRIP_NO)
+        {
+            throw new ApiException(400, "车次不能超过 " + FieldLimits.TRIP_NO + " 个字");
+        }
 
-        if (routeMapper.assignTrip(order.getId(), nextSeq, tripNo.trim()) == 0)
+        if (routeMapper.assignTrip(order.getId(), nextSeq, trip) == 0)
         {
             throw new ApiException(409, "指派失败，该路段已到站或不存在");
         }
@@ -261,6 +276,15 @@ public class AdminOrderServiceImpl implements AdminOrderService
         {
             throw new ApiException(409, "没有下一站可确认");
         }
+        OrderRoute current = routeMapper.findByOrderIdAndSeq(order.getId(), prevSeq);
+        if (current == null || current.getDepartTime() == null)
+        {
+            throw new ApiException(409, "上一站尚未发运，不能确认到货");
+        }
+        if (leg.getArriveTripNo() == null || leg.getArriveTripNo().isBlank())
+        {
+            throw new ApiException(400, "下一段尚未登记车次，不能确认到货");
+        }
         // 到货由目的站确认：货到了谁家谁签收
         if (operatorStationId != null && !operatorStationId.equals(leg.getStationId()))
         {
@@ -277,6 +301,20 @@ public class AdminOrderServiceImpl implements AdminOrderService
         {
             throw new ApiException(409, "推进失败，订单状态已变化");
         }
+    }
+
+    @Override
+    public List<StationInboxItem> inbox(Long stationId)
+    {
+        if (stationId == null)
+        {
+            throw new ApiException(403, "当前账号未绑定驿站");
+        }
+        List<StationInboxItem> items = new ArrayList<>();
+        items.addAll(orderMapper.findPendingDepart(stationId));
+        items.addAll(orderMapper.findPendingArrive(stationId));
+        items.addAll(orderMapper.findPendingDispatch(stationId));
+        return items;
     }
 
     private void requireCurrentStation(DeliveryOrder order, Long operatorStationId, String message)

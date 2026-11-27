@@ -10,6 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource/geist-mono": "^5.3.0",
+    "@fontsource/instrument-serif": "^5.3.0",
+    "@fontsource/inter-tight": "^5.3.0",
+    "@fontsource/noto-sans-sc": "^5.3.1",
+    "@fontsource/noto-serif-sc": "^5.3.1",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0"
   },

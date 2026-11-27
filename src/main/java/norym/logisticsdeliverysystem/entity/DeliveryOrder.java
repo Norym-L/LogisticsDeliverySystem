@@ -24,6 +24,13 @@ public class DeliveryOrder
     private Long toStationId;
     private String goodsDesc;
     private BigDecimal weight;
+    private BigDecimal volumeCm3;
+    private BigDecimal quotedPrice;
+    private BigDecimal actualVolumeCm3;
+    private BigDecimal actualWeight;
+    private BigDecimal price;
+    private LocalDateTime priceConfirmedAt;
+    private Long priceConfirmedBy;
 
     private OrderState state;
     private Integer currentSeq;
@@ -146,6 +153,81 @@ public class DeliveryOrder
     public void setWeight(BigDecimal weight)
     {
         this.weight = weight;
+    }
+
+    public BigDecimal getVolumeCm3()
+    {
+        return volumeCm3;
+    }
+
+    public void setVolumeCm3(BigDecimal volumeCm3)
+    {
+        this.volumeCm3 = volumeCm3;
+    }
+
+    public BigDecimal getQuotedPrice()
+    {
+        return quotedPrice;
+    }
+
+    public void setQuotedPrice(BigDecimal quotedPrice)
+    {
+        this.quotedPrice = quotedPrice;
+    }
+
+    public BigDecimal getActualVolumeCm3()
+    {
+        return actualVolumeCm3;
+    }
+
+    public void setActualVolumeCm3(BigDecimal actualVolumeCm3)
+    {
+        this.actualVolumeCm3 = actualVolumeCm3;
+    }
+
+    public BigDecimal getActualWeight()
+    {
+        return actualWeight;
+    }
+
+    public void setActualWeight(BigDecimal actualWeight)
+    {
+        this.actualWeight = actualWeight;
+    }
+
+    public BigDecimal getPrice()
+    {
+        return price;
+    }
+
+    public void setPrice(BigDecimal price)
+    {
+        this.price = price;
+    }
+
+    public LocalDateTime getPriceConfirmedAt()
+    {
+        return priceConfirmedAt;
+    }
+
+    public void setPriceConfirmedAt(LocalDateTime priceConfirmedAt)
+    {
+        this.priceConfirmedAt = priceConfirmedAt;
+    }
+
+    public Long getPriceConfirmedBy()
+    {
+        return priceConfirmedBy;
+    }
+
+    public void setPriceConfirmedBy(Long priceConfirmedBy)
+    {
+        this.priceConfirmedBy = priceConfirmedBy;
+    }
+
+    public boolean isPriceConfirmed()
+    {
+        return priceConfirmedAt != null;
     }
 
     public OrderState getState()
