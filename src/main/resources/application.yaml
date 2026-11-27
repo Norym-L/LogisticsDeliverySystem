@@ -27,6 +27,17 @@ logistics:
   approve-scan-interval-ms: 5000
   # 被拒后允许重提的最大次数
   max-resubmit: 3
+  pricing:
+    volumetric-divisor: 6000
+    tiers:
+      - max-km: 200
+        first-kg-price: 18
+        additional-kg-price: 5
+      - max-km: 1000
+        first-kg-price: 22
+        additional-kg-price: 8
+      - first-kg-price: 23
+        additional-kg-price: 10
 
 logging:
   level:

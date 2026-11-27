@@ -6,9 +6,11 @@
     <insert id="insert" parameterType="DeliveryOrder" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO delivery_order (order_no, sender_name, sender_phone, receiver_name, receiver_phone,
                                     from_station_id, to_station_id, goods_desc, weight,
+                                    volume_cm3, quoted_price,
                                     state, approve_deadline, return_of)
         VALUES (#{orderNo}, #{senderName}, #{senderPhone}, #{receiverName}, #{receiverPhone},
                 #{fromStationId}, #{toStationId}, #{goodsDesc}, #{weight},
+                #{volumeCm3}, #{quotedPrice},
                 #{state}, #{approveDeadline}, #{returnOf})
     </insert>
 
@@ -71,6 +73,13 @@
             to_station_id      = #{order.toStationId},
             goods_desc         = #{order.goodsDesc},
             weight             = #{order.weight},
+            volume_cm3         = #{order.volumeCm3},
+            quoted_price       = #{order.quotedPrice},
+            actual_volume_cm3  = NULL,
+            actual_weight      = NULL,
+            price              = NULL,
+            price_confirmed_at = NULL,
+            price_confirmed_by = NULL,
             state              = 'WAITING',
             reject_reason      = NULL,
             current_seq        = NULL,
@@ -223,6 +232,18 @@
             version = version + 1
         WHERE order_no = #{orderNo}
           AND state = #{from}
+    </update>
+
+    <update id="confirmPrice">
+        UPDATE delivery_order
+        SET actual_volume_cm3  = #{volumeCm3},
+            actual_weight      = #{weightKg},
+            price              = #{price},
+            price_confirmed_at = #{now},
+            price_confirmed_by = #{postmanId},
+            version            = version + 1
+        WHERE order_no = #{orderNo}
+          AND state IN ('SENDING', 'DELIVERING')
     </update>
 
 </mapper>

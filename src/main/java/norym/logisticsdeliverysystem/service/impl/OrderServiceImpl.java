@@ -19,6 +19,7 @@ import norym.logisticsdeliverysystem.mapper.DeliveryOrderMapper;
 import norym.logisticsdeliverysystem.mapper.OrderRouteMapper;
 import norym.logisticsdeliverysystem.mapper.StationMapper;
 import norym.logisticsdeliverysystem.service.OrderService;
+import norym.logisticsdeliverysystem.service.PricingService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -47,18 +48,21 @@ public class OrderServiceImpl implements OrderService
     private final DeliveryOrderMapper orderMapper;
     private final OrderRouteMapper routeMapper;
     private final StationMapper stationMapper;
+    private final PricingService pricingService;
     private final int approveTimeoutSeconds;
     private final int maxResubmit;
 
     public OrderServiceImpl(DeliveryOrderMapper orderMapper,
                             OrderRouteMapper routeMapper,
                             StationMapper stationMapper,
+                            PricingService pricingService,
                             @Value("${logistics.approve-timeout-seconds:60}") int approveTimeoutSeconds,
                             @Value("${logistics.max-resubmit:3}") int maxResubmit)
     {
         this.orderMapper = orderMapper;
         this.routeMapper = routeMapper;
         this.stationMapper = stationMapper;
+        this.pricingService = pricingService;
         this.approveTimeoutSeconds = approveTimeoutSeconds;
         this.maxResubmit = maxResubmit;
     }
@@ -75,7 +79,7 @@ public class OrderServiceImpl implements OrderService
         order.setState(OrderState.WAITING);
         order.setApproveDeadline(now.plusSeconds(approveTimeoutSeconds));
         insertWithRetry(order);
-        return new CreatedOrderView(order.getOrderNo(), order.getState().name(), order.getApproveDeadline());
+        return toCreated(order);
     }
 
     /** 取号并插入；极低概率撞号时换一个随机串重试 */
@@ -115,7 +119,10 @@ public class OrderServiceImpl implements OrderService
                     stationName(stations, order.getFromStationId()),
                     stationName(stations, order.getToStationId()),
                     order.getCreateTime(),
-                    order.getApproveDeadline()));
+                    order.getApproveDeadline(),
+                    order.getQuotedPrice(),
+                    order.getPrice(),
+                    order.isPriceConfirmed()));
         }
         return result;
     }
@@ -148,6 +155,13 @@ public class OrderServiceImpl implements OrderService
                 toView(stations, order.getToStationId()),
                 toView(stations, order.getCurrentStationId()),
                 order.getGoodsDesc(), order.getWeight(),
+                order.getVolumeCm3(),
+                order.getActualWeight(),
+                order.getActualVolumeCm3(),
+                order.getQuotedPrice(),
+                order.getPrice(),
+                order.isPriceConfirmed(),
+                order.getPriceConfirmedAt(),
                 trajectory,
                 new OrderDetailView.Events(order.getCreateTime(), order.getApproveTime(),
                         order.getReceiveTime(), order.getRefuseTime()),
@@ -291,12 +305,16 @@ public class OrderServiceImpl implements OrderService
         back.setToStationId(original.getFromStationId());
         back.setGoodsDesc(original.getGoodsDesc());
         back.setWeight(original.getWeight());
+        back.setVolumeCm3(original.getVolumeCm3());
+        back.setQuotedPrice(estimateQuotedPrice(
+                back.getFromStationId(), back.getToStationId(),
+                back.getWeight(), back.getVolumeCm3()));
         back.setState(OrderState.WAITING);
         back.setApproveDeadline(LocalDateTime.now().plusSeconds(approveTimeoutSeconds));
         back.setReturnOf(original.getOrderNo());
 
         insertWithRetry(back);
-        return new CreatedOrderView(back.getOrderNo(), back.getState().name(), back.getApproveDeadline());
+        return toCreated(back);
     }
 
     private DeliveryOrder requireOrder(String orderNo)
@@ -355,6 +373,17 @@ public class OrderServiceImpl implements OrderService
                 throw new ApiException(400, "重量超出范围");
             }
         }
+        if (request.volumeCm3() != null)
+        {
+            if (request.volumeCm3().compareTo(BigDecimal.ZERO) < 0)
+            {
+                throw new ApiException(400, "体积不能为负");
+            }
+            if (request.volumeCm3().compareTo(FieldLimits.MAX_VOLUME) > 0)
+            {
+                throw new ApiException(400, "体积超出范围");
+            }
+        }
     }
 
     private void fillForm(DeliveryOrder order, OrderFormRequest request)
@@ -367,6 +396,39 @@ public class OrderServiceImpl implements OrderService
         order.setToStationId(request.toStationId());
         order.setGoodsDesc(isBlank(request.goodsDesc()) ? null : request.goodsDesc().trim());
         order.setWeight(request.weight());
+        order.setVolumeCm3(request.volumeCm3());
+        order.setQuotedPrice(estimateQuotedPrice(
+                request.fromStationId(), request.toStationId(),
+                request.weight(), request.volumeCm3()));
+    }
+
+    /**
+     * 质量和体积都大于 0 时，按最短路给出预估价；只填其中一项则不算价。
+     */
+    private BigDecimal estimateQuotedPrice(Long fromStationId, Long toStationId,
+                                           BigDecimal weight, BigDecimal volumeCm3)
+    {
+        if (weight == null || volumeCm3 == null)
+        {
+            return null;
+        }
+        if (weight.compareTo(BigDecimal.ZERO) <= 0 || volumeCm3.compareTo(BigDecimal.ZERO) <= 0)
+        {
+            return null;
+        }
+        return pricingService.quoteShortest(fromStationId, toStationId, weight, volumeCm3).freight();
+    }
+
+    private CreatedOrderView toCreated(DeliveryOrder order)
+    {
+        return new CreatedOrderView(
+                order.getOrderNo(),
+                order.getState() == null ? null : order.getState().name(),
+                order.getApproveDeadline(),
+                order.getVolumeCm3(),
+                order.getQuotedPrice(),
+                order.getPrice(),
+                order.isPriceConfirmed());
     }
 
     /** 退回单的收发件人和起止站必须保持对调结果，只允许改货物信息 */

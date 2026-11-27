@@ -15,22 +15,25 @@ const busy = ref(false)
 const copy = {
   path: {
     sub: '路径管理台',
-    title: '检查请求，定下路线',
+    kicker: '检查请求，',
+    title: '定下路线',
     lead: '审批订单、调整途经节点，确认后即固化路线。',
     account: '管理员账号',
     hint: '演示账号 admin / 123456'
   },
   station: {
-    sub: '节点工作台',
-    title: '登记车次，确认到货',
+    sub: '驿站工作台',
+    kicker: '登记车次，',
+    title: '确认到货',
     lead: '处理本站待发运、待到货和最后一公里派单。',
     account: '节点账号',
     hint: '演示账号 st001 到 st008 / 123456'
   },
   courier: {
-    sub: '快递员',
-    title: '取件，开始派送',
-    lead: '查看分给自己的单，扫码取件后由收件人签收。',
+    sub: '快递员工作台',
+    kicker: '取件，',
+    title: '开始派送',
+    lead: '查看分给自己的单，核对运费后再取件，由收件人签收。',
     account: '快递员账号',
     hint: '演示账号 pm001 到 pm016 / 123456'
   }
@@ -72,7 +75,10 @@ async function submit() {
         </div>
       </div>
 
-      <h1>{{ text.title }}</h1>
+      <h1>
+        <span>{{ text.kicker }}</span>
+        <span>{{ text.title }}</span>
+      </h1>
       <p>{{ text.lead }}</p>
 
       <form class="login-form" @submit.prevent="submit">
@@ -103,7 +109,7 @@ async function submit() {
         ·
         <RouterLink to="/login">路径管理</RouterLink>
         ·
-        <RouterLink to="/station/login">节点工作台</RouterLink>
+        <RouterLink to="/station/login">驿站工作台</RouterLink>
         ·
         <RouterLink to="/courier/login">快递员</RouterLink>
       </p>

@@ -81,4 +81,14 @@ public interface DeliveryOrderMapper
     int transition(@Param("orderNo") String orderNo,
                    @Param("from") OrderState from,
                    @Param("to") OrderState to);
+
+    /**
+     * 写入实测体积、质量与最终运费。只允许待取件或派送中的订单改价。
+     */
+    int confirmPrice(@Param("orderNo") String orderNo,
+                     @Param("volumeCm3") java.math.BigDecimal volumeCm3,
+                     @Param("weightKg") java.math.BigDecimal weightKg,
+                     @Param("price") java.math.BigDecimal price,
+                     @Param("now") LocalDateTime now,
+                     @Param("postmanId") Long postmanId);
 }

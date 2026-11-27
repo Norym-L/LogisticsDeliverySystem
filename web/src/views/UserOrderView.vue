@@ -2,7 +2,7 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { http } from '@/api/client'
-import { type OrderDetail, type OrderStatus, type StationView } from '@/api/types'
+import { formatYuan, type OrderDetail, type OrderStatus, type PriceQuote, type StationView } from '@/api/types'
 import StatusBadge from '@/components/StatusBadge.vue'
 import Trajectory from '@/components/Trajectory.vue'
 
@@ -24,6 +24,10 @@ const fromStationId = ref<number | ''>('')
 const toStationId = ref<number | ''>('')
 const goodsDesc = ref('')
 const weight = ref<number | ''>('')
+const volumeCm3 = ref<number | ''>('')
+const quote = ref<PriceQuote | null>(null)
+const quoteError = ref('')
+let quoteSeq = 0
 
 const orderNo = computed(() => String(route.params.orderNo ?? ''))
 const isReturn = computed(() => Boolean(detail.value?.originalOrderNo))
@@ -43,7 +47,28 @@ function fillForm(order: OrderDetail) {
   toStationId.value = order.toStation?.id ?? ''
   goodsDesc.value = order.goodsDesc ?? ''
   weight.value = order.weight ?? ''
+  volumeCm3.value = order.volumeCm3 ?? ''
 }
+
+watch([fromStationId, toStationId, weight, volumeCm3], async () => {
+  const seq = ++quoteSeq
+  quote.value = null
+  quoteError.value = ''
+  const mass = Number(weight.value)
+  const volume = Number(volumeCm3.value)
+  if (!fromStationId.value || !toStationId.value || !(mass > 0) || !(volume > 0)) return
+  try {
+    const result = await http.post<PriceQuote>('/pricing/quote', {
+      weightKg: mass,
+      volumeCm3: volume,
+      fromStationId: fromStationId.value,
+      toStationId: toStationId.value
+    })
+    if (seq === quoteSeq) quote.value = result
+  } catch (e) {
+    if (seq === quoteSeq) quoteError.value = e instanceof Error ? e.message : '试算失败'
+  }
+})
 
 async function load() {
   error.value = ''
@@ -149,7 +174,8 @@ async function resubmit() {
       fromStationId: fromStationId.value,
       toStationId: toStationId.value,
       goodsDesc: goodsDesc.value.trim(),
-      weight: weight.value === '' ? null : Number(weight.value)
+      weight: weight.value === '' ? null : Number(weight.value),
+      volumeCm3: volumeCm3.value === '' ? null : Number(volumeCm3.value)
     })
     message.value = '已重新提交，等待审批'
     await load()
@@ -182,97 +208,155 @@ async function resubmit() {
     <p v-if="message" class="hint">{{ message }}</p>
     <p v-if="!detail && !error" class="hint">正在读取订单…</p>
 
-    <div v-if="detail" class="card rise" style="padding: 22px">
-      <div class="kv">
-        <div>
-          <span>状态</span>
-          <b><StatusBadge :state="detail.state" /></b>
+    <div v-if="detail" class="workspace" :class="{ 'is-compose': detail.state === 'REJECTED' }">
+      <div class="pane-list">
+        <div class="kv">
+          <div>
+            <span>状态</span>
+            <b><StatusBadge :state="detail.state" /></b>
+          </div>
+          <div v-if="detail.state === 'WAITING'">
+            <span>审批剩余</span>
+            <b>{{ countdown() }}</b>
+          </div>
+          <div>
+            <span>寄件人</span>
+            <b>{{ detail.senderName }} {{ detail.senderPhone }}</b>
+          </div>
+          <div>
+            <span>收件人</span>
+            <b>{{ detail.receiverName }} {{ detail.receiverPhone }}</b>
+          </div>
+          <div>
+            <span>始发站</span>
+            <b>{{ detail.fromStation?.name ?? '—' }}</b>
+          </div>
+          <div>
+            <span>目的站</span>
+            <b>{{ detail.toStation?.name ?? '—' }}</b>
+          </div>
+          <div>
+            <span>货物</span>
+            <b>{{ detail.goodsDesc ?? '—' }} · {{ detail.weight ?? '—' }} kg<template v-if="detail.volumeCm3 != null"> · {{ detail.volumeCm3 }} cm³</template></b>
+          </div>
         </div>
-        <div v-if="detail.state === 'WAITING'">
-          <span>审批剩余</span>
-          <b>{{ countdown() }}</b>
+
+        <p v-if="detail.rejectReason" class="hint">拒绝原因：{{ detail.rejectReason }}</p>
+
+        <div class="detail-block">
+          <h2>轨迹</h2>
+          <p v-if="detail.trajectory.length === 0" class="hint">审批通过后才会生成路线。</p>
+          <Trajectory v-else :nodes="detail.trajectory" />
         </div>
-        <div>
-          <span>寄件人</span>
-          <b>{{ detail.senderName }} {{ detail.senderPhone }}</b>
-        </div>
-        <div>
-          <span>收件人</span>
-          <b>{{ detail.receiverName }} {{ detail.receiverPhone }}</b>
-        </div>
-        <div>
-          <span>始发 / 目的</span>
-          <b>{{ detail.fromStation?.name ?? '—' }} → {{ detail.toStation?.name ?? '—' }}</b>
-        </div>
-        <div>
-          <span>货物</span>
-          <b>{{ detail.goodsDesc ?? '—' }} · {{ detail.weight ?? '—' }} kg</b>
-        </div>
+
+        <form v-if="detail.state === 'REJECTED'" class="login-form detail-block" @submit.prevent="resubmit">
+          <h2>修改后重新提交</h2>
+          <p class="hint">寄件人手机号必须与当前订单一致。退回单不能改收发件人和起止站。</p>
+          <div class="form-split">
+            <fieldset>
+              <legend>寄件人</legend>
+              <div class="field">
+                <label for="resubmit-sender-name">姓名</label>
+                <input id="resubmit-sender-name" v-model="senderName" :disabled="isReturn" required maxlength="32" />
+              </div>
+              <div class="field">
+                <label for="resubmit-sender-phone">手机号</label>
+                <input id="resubmit-sender-phone" v-model="senderPhone" :disabled="isReturn" required maxlength="11" />
+              </div>
+              <div class="field">
+                <label>始发站</label>
+                <select v-model="fromStationId" :disabled="isReturn">
+                  <option v-for="station in stations" :key="station.id" :value="station.id">{{ station.name }}</option>
+                </select>
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>收件人</legend>
+              <div class="field">
+                <label for="resubmit-receiver-name">姓名</label>
+                <input id="resubmit-receiver-name" v-model="receiverName" :disabled="isReturn" required maxlength="32" />
+              </div>
+              <div class="field">
+                <label for="resubmit-receiver-phone">手机号</label>
+                <input id="resubmit-receiver-phone" v-model="receiverPhoneEdit" :disabled="isReturn" required maxlength="11" />
+              </div>
+              <div class="field">
+                <label>目的站</label>
+                <select v-model="toStationId" :disabled="isReturn">
+                  <option v-for="station in stations" :key="station.id" :value="station.id">{{ station.name }}</option>
+                </select>
+              </div>
+            </fieldset>
+          </div>
+          <div class="form-goods">
+            <div class="field">
+              <label>货物描述</label>
+              <input v-model="goodsDesc" maxlength="255" />
+            </div>
+            <div class="field">
+              <label>质量（kg）</label>
+              <input v-model="weight" type="number" min="0" step="0.01" />
+            </div>
+            <div class="field">
+              <label>体积（立方厘米）</label>
+              <input v-model="volumeCm3" type="number" min="0" step="1" />
+            </div>
+          </div>
+          <div class="compose-actions">
+            <button type="submit" :disabled="busy">重新提交</button>
+          </div>
+        </form>
       </div>
 
-      <p v-if="detail.rejectReason" class="hint">拒绝原因：{{ detail.rejectReason }}</p>
+      <aside class="pane-detail">
+        <div class="fare-panel">
+          <h2>运费</h2>
+          <div class="fare-rows">
+            <div>
+              <span>预估价</span>
+              <b>{{ formatYuan(detail.quotedPrice) }}</b>
+            </div>
+            <div>
+              <span>最终运费</span>
+              <b>{{ detail.priceConfirmed ? formatYuan(detail.price) : '尚未核价' }}</b>
+            </div>
+          </div>
+          <template v-if="detail.state === 'REJECTED' && quote">
+            <div class="fare-total">
+              <span>修改后预估</span>
+              <b>{{ formatYuan(quote.freight) }}</b>
+            </div>
+            <div class="fare-rows" style="border: none; padding-top: 16px">
+              <div>
+                <span>里程</span>
+                <b>{{ quote.distanceKm }} km</b>
+              </div>
+              <div>
+                <span>计费重量</span>
+                <b>{{ quote.chargeableWeightKg }} kg</b>
+              </div>
+            </div>
+          </template>
+          <p v-else-if="detail.state === 'REJECTED' && quoteError" class="error" role="alert">{{ quoteError }}</p>
+          <p class="fare-note">最终运费由快递员取件时核对。</p>
+        </div>
 
-      <h2 style="font-size: 15px; margin: 18px 0 8px">轨迹</h2>
-      <p v-if="detail.trajectory.length === 0" class="hint">审批通过后才会生成路线。</p>
-      <Trajectory v-else :nodes="detail.trajectory" />
-
-      <form v-if="detail.state === 'DELIVERING'" class="login-form" style="margin-top: 18px" @submit.prevent="sign">
-        <h2 style="font-size: 15px; margin: 0">签收或拒收</h2>
-        <div class="field">
-          <label for="sign-phone">收件人手机号</label>
-          <input id="sign-phone" v-model="receiverPhone" required maxlength="11" />
-        </div>
-        <div class="field">
-          <label for="refuse-reason">拒收原因（拒收时填写）</label>
-          <input id="refuse-reason" v-model="refuseReason" maxlength="255" />
-        </div>
-        <div class="head-actions">
-          <button type="submit" :disabled="busy">签收</button>
-          <button class="ghost" type="button" :disabled="busy" @click="refuse">拒收并生成退回单</button>
-        </div>
-      </form>
-
-      <form v-if="detail.state === 'REJECTED'" class="login-form" style="margin-top: 18px" @submit.prevent="resubmit">
-        <h2 style="font-size: 15px; margin: 0">修改后重新提交</h2>
-        <p class="hint">寄件人手机号必须与当前订单一致。退回单不能改收发件人和起止站。</p>
-        <div class="field">
-          <label>寄件人</label>
-          <input v-model="senderName" :disabled="isReturn" required maxlength="32" />
-        </div>
-        <div class="field">
-          <label>寄件人手机号</label>
-          <input v-model="senderPhone" :disabled="isReturn" required maxlength="11" />
-        </div>
-        <div class="field">
-          <label>收件人</label>
-          <input v-model="receiverName" :disabled="isReturn" required maxlength="32" />
-        </div>
-        <div class="field">
-          <label>收件人手机号</label>
-          <input v-model="receiverPhoneEdit" :disabled="isReturn" required maxlength="11" />
-        </div>
-        <div class="field">
-          <label>始发站</label>
-          <select v-model="fromStationId" :disabled="isReturn">
-            <option v-for="station in stations" :key="station.id" :value="station.id">{{ station.name }}</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>目的站</label>
-          <select v-model="toStationId" :disabled="isReturn">
-            <option v-for="station in stations" :key="station.id" :value="station.id">{{ station.name }}</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>货物描述</label>
-          <input v-model="goodsDesc" maxlength="255" />
-        </div>
-        <div class="field">
-          <label>重量（kg）</label>
-          <input v-model="weight" type="number" min="0" step="0.01" />
-        </div>
-        <button type="submit" :disabled="busy">重新提交</button>
-      </form>
+        <form v-if="detail.state === 'DELIVERING'" class="login-form detail-block" @submit.prevent="sign">
+          <h2>签收或拒收</h2>
+          <div class="field">
+            <label for="sign-phone">收件人手机号</label>
+            <input id="sign-phone" v-model="receiverPhone" required maxlength="11" />
+          </div>
+          <div class="field">
+            <label for="refuse-reason">拒收原因（拒收时填写）</label>
+            <input id="refuse-reason" v-model="refuseReason" maxlength="255" />
+          </div>
+          <div class="compose-actions">
+            <button type="submit" :disabled="busy">签收</button>
+            <button class="ghost" type="button" :disabled="busy" @click="refuse">拒收并生成退回单</button>
+          </div>
+        </form>
+      </aside>
     </div>
   </section>
 </template>

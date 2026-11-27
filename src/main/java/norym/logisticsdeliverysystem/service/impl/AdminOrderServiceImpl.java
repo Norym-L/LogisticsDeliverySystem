@@ -60,7 +60,10 @@ public class AdminOrderServiceImpl implements AdminOrderService
                     stationName(stations, order.getFromStationId()),
                     stationName(stations, order.getToStationId()),
                     order.getCreateTime(),
-                    order.getApproveDeadline()));
+                    order.getApproveDeadline(),
+                    order.getQuotedPrice(),
+                    order.getPrice(),
+                    order.isPriceConfirmed()));
         }
         return result;
     }

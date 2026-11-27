@@ -30,6 +30,12 @@ async function load() {
   loading.value = true
   try {
     orders.value = await http.get<OrderBrief[]>('/admin/orders/pending')
+    if (selected.value) {
+      const current = orders.value.find((order) => order.orderNo === selected.value?.orderNo)
+      if (current) selected.value = current
+      else close()
+    }
+    if (!selected.value && orders.value[0]) await open(orders.value[0])
   } catch (e) {
     say(e instanceof Error ? e.message : '加载失败')
   } finally {
@@ -172,88 +178,87 @@ onUnmounted(() => window.clearInterval(clock))
   <section>
     <header class="page-head">
       <div>
-        <h1>待审批请求</h1>
-        <p>系统已按驿站线路算出最短路径，批准后路线固定，随后由各站按车次运输。</p>
+        <p class="page-index">01 / 03 · 待审批</p>
+        <h1>待审批</h1>
+        <p>点开左侧一单，在右侧检查推荐路线、调整途经站，再批准或拒绝。</p>
       </div>
       <div class="head-actions">
+        <span class="pane-count">{{ orders.length }} 单 · 最近剩余 {{ soonest }}</span>
         <button class="ghost small" type="button" :disabled="loading" @click="load">
           {{ loading ? '刷新中…' : '刷新' }}
         </button>
       </div>
     </header>
 
-    <div class="stats">
-      <div class="stat">
-        <b>{{ orders.length }}</b>
-        <span>待审批订单</span>
-      </div>
-      <div class="stat">
-        <b>{{ soonest }}</b>
-        <span>最近一单剩余审批时间</span>
-      </div>
-      <div class="stat">
-        <b>Dijkstra</b>
-        <span>最短路径算法</span>
-      </div>
-    </div>
-
-    <div v-if="loading && orders.length === 0" class="card rise" style="padding: 32px">
-      <p class="hint" style="margin: 0">正在读取待审批列表…</p>
-    </div>
-
-    <div v-else-if="orders.length === 0" class="card rise">
-      <EmptyState title="没有待审批的请求" hint="新订单提交后会出现在这里，审批超时的订单会被系统自动拒绝。" />
-    </div>
-
-    <div v-else class="list">
-      <article
-        v-for="(order, index) in orders"
-        :key="order.orderNo"
-        class="card clickable order-row rise"
-        :style="{ animationDelay: `${Math.min(index, 6) * 80}ms` }"
-        role="button"
-        tabindex="0"
-        @click="open(order)"
-        @keydown.enter.prevent="open(order)"
-        @keydown.space.prevent="open(order)"
-      >
-        <div style="min-width: 0">
-          <div class="route-line">
-            <span>{{ order.fromStation ?? '—' }}</span>
-            <span class="arrow">→</span>
-            <span>{{ order.toStation ?? '—' }}</span>
-          </div>
-          <div class="meta">
-            <b>{{ order.orderNo }}</b>
-          </div>
+    <div class="workspace">
+      <div class="pane-list">
+        <div v-if="loading && orders.length === 0" class="pane-empty">
+          <p class="hint" style="margin: 0">正在读取待审批列表…</p>
         </div>
 
-        <div class="meta">
-          <b>{{ formatTime(order.createTime) }}</b>
-          <span>{{ waited(order.createTime) }}</span>
-          <span>剩余 {{ remainingLabel(order.approveDeadline, now) }}</span>
+        <div v-else-if="orders.length === 0" class="pane-empty">
+          <EmptyState title="没有待审批的请求" hint="新订单提交后会出现在这里，审批超时的订单会被系统自动拒绝。" />
         </div>
 
-        <div class="row-end">
-          <StatusBadge :state="order.state" />
-          <button class="small" type="button" @click.stop="open(order)">查看路线</button>
-        </div>
-      </article>
-    </div>
-
-    <Teleport to="body">
-      <template v-if="selected">
-        <div class="overlay" @click="close" />
-        <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
-          <header class="drawer-head">
-            <div>
-              <h2 id="drawer-title">检查请求</h2>
-              <p class="hint" style="margin: 0">{{ selected.orderNo }}</p>
+        <div v-else class="list">
+          <article
+            v-for="order in orders"
+            :key="order.orderNo"
+            class="card clickable order-row"
+            :class="{ 'is-selected': selected?.orderNo === order.orderNo }"
+            role="button"
+            tabindex="0"
+            @click="open(order)"
+            @keydown.enter.prevent="open(order)"
+            @keydown.space.prevent="open(order)"
+          >
+            <div style="min-width: 0">
+              <div class="route-line">
+                <span>{{ order.fromStation ?? '—' }}</span>
+                <span class="arrow">→</span>
+                <span>{{ order.toStation ?? '—' }}</span>
+              </div>
+              <div class="meta">
+                <b>{{ order.orderNo }}</b>
+                <span>{{ waited(order.createTime) }}</span>
+                <span>剩余 {{ remainingLabel(order.approveDeadline, now) }}</span>
+              </div>
             </div>
-            <button class="ghost small" type="button" aria-label="关闭" @click="close">关闭</button>
-          </header>
+            <StatusBadge :state="order.state" />
+          </article>
+        </div>
+      </div>
 
-          <div class="drawer-body">
+      <aside class="pane-detail">
+        <div v-if="!selected" class="pane-empty">
+          <EmptyState title="从左侧选择一单" hint="系统已按驿站线路算出最短路径，批准后路线固定。" />
+        </div>
+
+        <template v-else>
+          <div class="detail-block" style="margin-top: 0; padding-top: 0; border: none">
+            <div class="detail-head">
+              <h2>检查请求</h2>
+              <div class="compose-actions">
+                <template v-if="rejecting">
+                  <button class="ghost small" type="button" :disabled="busy" @click="rejecting = false">返回</button>
+                  <button class="small danger" type="button" :disabled="busy" @click="reject">
+                    {{ busy ? '正在提交…' : '确认拒绝' }}
+                  </button>
+                </template>
+                <template v-else>
+                  <button class="ghost small" type="button" :disabled="busy" @click="rejecting = true">拒绝</button>
+                  <button class="small" type="button" :disabled="busy || planLoading" @click="approve">
+                    {{ busy ? '正在批准…' : '批准并固化路线' }}
+                  </button>
+                </template>
+              </div>
+            </div>
+            <p class="hint" style="margin: 6px 0 12px">{{ selected.orderNo }}</p>
+            <div v-if="rejecting" class="field" style="margin-bottom: 14px">
+              <label for="reason">拒绝原因</label>
+              <textarea id="reason" v-model="reason" maxlength="255" placeholder="例如：货物描述不完整，请补充后再提交" />
+              <span class="hint">原因会展示给用户，用户可修改信息后重提，最多 3 次。</span>
+            </div>
             <div class="kv">
               <div>
                 <span>始发站</span>
@@ -272,102 +277,82 @@ onUnmounted(() => window.clearInterval(clock))
                 <b><StatusBadge :state="selected.state" /></b>
               </div>
             </div>
+          </div>
 
-            <div>
-              <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px">
-                <strong style="font-size: 14px">推荐路线</strong>
-                <small class="hint">{{ stopCount }} 段 · {{ totalKm }} km</small>
-              </div>
+          <div class="detail-block">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px">
+              <h2 style="margin: 0">推荐路线</h2>
+              <small class="hint">{{ stopCount }} 段 · {{ totalKm }} km</small>
+            </div>
 
-              <p v-if="planLoading" class="hint">正在计算最短路径…</p>
+            <p v-if="planLoading" class="hint">正在计算最短路径…</p>
 
-              <div v-else-if="plan" class="rail">
-                <div
-                  v-for="(station, i) in plan.stations"
-                  :key="station.id"
-                  class="stop"
-                  :class="{ 'is-last': i === plan.stations.length - 1 }"
-                >
-                  <span>{{ station.name }}</span>
-                  <small>{{ station.code }}</small>
-                </div>
-              </div>
-
-              <p v-if="plan" class="hint" style="margin-top: 12px">
-                上面是最短路径。可以增删中间站，批准时按下面的顺序固化；相邻站之间必须有线路。
-              </p>
-
-              <div v-if="editableIds.length" class="list" style="gap: 8px; margin-top: 12px">
-                <div
-                  v-for="(id, index) in editableIds"
-                  :key="`${index}-${id}`"
-                  style="display: flex; gap: 8px; align-items: center"
-                >
-                  <select
-                    :value="id"
-                    :disabled="index === 0 || index === editableIds.length - 1"
-                    @change="setStop(index, $event)"
-                  >
-                    <option v-for="station in stations" :key="station.id" :value="station.id">
-                      {{ station.name }}
-                    </option>
-                    <option v-if="!stations.some((station) => station.id === id)" :value="id">
-                      {{ stationName(id) }}
-                    </option>
-                  </select>
-                  <button
-                    v-if="index > 0 && index < editableIds.length - 1"
-                    class="ghost tiny"
-                    type="button"
-                    @click="moveStop(index, -1)"
-                  >
-                    上移
-                  </button>
-                  <button
-                    v-if="index > 0 && index < editableIds.length - 1"
-                    class="ghost tiny"
-                    type="button"
-                    @click="moveStop(index, 1)"
-                  >
-                    下移
-                  </button>
-                  <button
-                    v-if="index > 0 && index < editableIds.length - 1"
-                    class="ghost tiny"
-                    type="button"
-                    @click="removeStop(index)"
-                  >
-                    移除
-                  </button>
-                </div>
-                <button class="ghost small" type="button" @click="addStop">加入途经站</button>
+            <div v-else-if="plan" class="rail">
+              <div
+                v-for="(station, i) in plan.stations"
+                :key="station.id"
+                class="stop"
+                :class="{ 'is-last': i === plan.stations.length - 1 }"
+              >
+                <span>{{ station.name }}</span>
+                <small>{{ station.code }}</small>
               </div>
             </div>
 
-            <div v-if="rejecting" class="field">
-              <label for="reason">拒绝原因</label>
-              <textarea id="reason" v-model="reason" maxlength="255" placeholder="例如：货物描述不完整，请补充后再提交" />
-              <span class="hint">原因会展示给用户，用户可修改信息后重提，最多 3 次。</span>
+            <p v-if="plan" class="hint" style="margin-top: 8px">
+              可增删中间站，批准时按下面顺序固化；相邻站之间须有线路。
+            </p>
+
+            <div v-if="editableIds.length" class="list" style="gap: 8px; margin-top: 12px">
+              <div
+                v-for="(id, index) in editableIds"
+                :key="`${index}-${id}`"
+                class="stop-editor"
+              >
+                <select
+                  :value="id"
+                  :disabled="index === 0 || index === editableIds.length - 1"
+                  @change="setStop(index, $event)"
+                >
+                  <option v-for="station in stations" :key="station.id" :value="station.id">
+                    {{ station.name }}
+                  </option>
+                  <option v-if="!stations.some((station) => station.id === id)" :value="id">
+                    {{ stationName(id) }}
+                  </option>
+                </select>
+                <button
+                  v-if="index > 0 && index < editableIds.length - 1"
+                  class="ghost tiny"
+                  type="button"
+                  @click="moveStop(index, -1)"
+                >
+                  上移
+                </button>
+                <button
+                  v-if="index > 0 && index < editableIds.length - 1"
+                  class="ghost tiny"
+                  type="button"
+                  @click="moveStop(index, 1)"
+                >
+                  下移
+                </button>
+                <button
+                  v-if="index > 0 && index < editableIds.length - 1"
+                  class="ghost tiny"
+                  type="button"
+                  @click="removeStop(index)"
+                >
+                  移除
+                </button>
+              </div>
+              <button class="ghost small" type="button" @click="addStop">加入途经站</button>
             </div>
           </div>
 
-          <footer class="drawer-foot">
-            <template v-if="rejecting">
-              <button class="ghost small" type="button" :disabled="busy" @click="rejecting = false">返回</button>
-              <button class="small" type="button" :disabled="busy" @click="reject">
-                {{ busy ? '正在提交…' : '确认拒绝' }}
-              </button>
-            </template>
-            <template v-else>
-              <button class="ghost small" type="button" :disabled="busy" @click="rejecting = true">拒绝</button>
-              <button class="small" type="button" :disabled="busy || planLoading" @click="approve">
-                {{ busy ? '正在批准…' : '批准并固化路线' }}
-              </button>
-            </template>
-          </footer>
-        </aside>
-      </template>
-    </Teleport>
+        </template>
+      </aside>
+    </div>
 
     <div v-if="toast" class="toast" role="status">{{ toast }}</div>
   </section>

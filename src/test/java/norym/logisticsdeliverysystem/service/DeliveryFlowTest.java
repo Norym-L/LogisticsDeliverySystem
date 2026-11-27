@@ -1,5 +1,6 @@
 package norym.logisticsdeliverysystem.service;
 
+import norym.logisticsdeliverysystem.dto.ConfirmPriceRequest;
 import norym.logisticsdeliverysystem.dto.OrderFormRequest;
 import norym.logisticsdeliverysystem.dto.PostmanTask;
 import norym.logisticsdeliverysystem.entity.OrderState;
@@ -73,8 +74,16 @@ class DeliveryFlowTest
         assertTrue(orderNos(world.adminPostmen.tasks(COURIER, "pending", null)).contains(orderNo));
         assertTrue(orderNos(world.adminPostmen.tasks(COURIER, "completed", null)).isEmpty());
 
-        world.postmanOrders.pickup(orderNo, COURIER);
+        ApiException noPrice = assertThrows(ApiException.class,
+                () -> world.postmanOrders.pickup(orderNo, COURIER, null));
+        assertEquals(400, noPrice.getCode());
+        assertTrue(noPrice.getMessage().contains("体积"));
+
+        world.postmanOrders.confirmPrice(orderNo, COURIER,
+                new ConfirmPriceRequest(new BigDecimal("12000"), new BigDecimal("1.50")));
+        world.postmanOrders.pickup(orderNo, COURIER, null);
         assertEquals(OrderState.DELIVERING, world.orderState(orderNo));
+        assertEquals(0, new BigDecimal("33").compareTo(world.orderService.detail(orderNo).price()));
         assertEquals(RouteStatus.DELIVERING, world.routeStatus(orderNo, 5));
         assertTrue(orderNos(world.adminPostmen.tasks(COURIER, "pending", null)).contains(orderNo));
 
@@ -130,6 +139,43 @@ class DeliveryFlowTest
         assertEquals(400, longReason.getCode());
     }
 
+    @Test
+    void createQuotesByShortestPathAndPickupCanConfirmInOneStep()
+    {
+        FlowWorld world = FlowWorld.seed();
+        var created = world.orderService.create(new OrderFormRequest(
+                "张三", "13700000001", "李四", "13700000002",
+                1L, 8L, "书籍", new BigDecimal("2.4"), new BigDecimal("12000")));
+        assertEquals(0, new BigDecimal("37").compareTo(created.quotedPrice()));
+        assertEquals(Boolean.FALSE, created.priceConfirmed());
+
+        var onlyWeight = world.orderService.create(new OrderFormRequest(
+                "张三", "13700000001", "李四", "13700000002",
+                6L, 8L, "小件", new BigDecimal("1"), null));
+        assertEquals(null, onlyWeight.quotedPrice());
+
+        String orderNo = world.orderService.create(form("13700000001", "13700000002", "教材")).orderNo();
+        world.adminOrders.approve(orderNo, 1L, null);
+        for (var hop : java.util.List.of(
+                java.util.Map.entry(1L, "T1"),
+                java.util.Map.entry(2L, "T2"),
+                java.util.Map.entry(3L, "T3"),
+                java.util.Map.entry(5L, "T4")))
+        {
+            world.adminOrders.assignTrip(orderNo, hop.getKey(), hop.getValue());
+            world.adminOrders.depart(orderNo, hop.getKey());
+            long next = hop.getKey() == 1L ? 2L : hop.getKey() == 2L ? 3L : hop.getKey() == 3L ? 5L : 6L;
+            world.adminOrders.arrive(orderNo, next);
+        }
+        world.adminOrders.assignCourier(orderNo, 6L, COURIER);
+        world.postmanOrders.pickup(orderNo, COURIER,
+                new ConfirmPriceRequest(new BigDecimal("1000"), new BigDecimal("1")));
+        assertEquals(OrderState.DELIVERING, world.orderState(orderNo));
+        assertEquals(Boolean.TRUE, world.orderService.detail(orderNo).priceConfirmed());
+        // 北京到上海 1377km，1kg 小体积，首重 23 元
+        assertEquals(0, new BigDecimal("23").compareTo(world.orderService.detail(orderNo).price()));
+    }
+
     private static List<String> orderNos(List<PostmanTask> tasks)
     {
         return tasks.stream().map(PostmanTask::getOrderNo).toList();
@@ -143,6 +189,7 @@ class DeliveryFlowTest
     private static OrderFormRequest form(String senderPhone, String receiverPhone, String goods,
                                          long fromId, long toId)
     {
-        return new OrderFormRequest("张三", senderPhone, "李四", receiverPhone, fromId, toId, goods, new BigDecimal("1.50"));
+        return new OrderFormRequest("张三", senderPhone, "李四", receiverPhone, fromId, toId, goods,
+                new BigDecimal("1.50"), null);
     }
 }

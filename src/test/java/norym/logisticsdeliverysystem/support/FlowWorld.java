@@ -18,10 +18,13 @@ import norym.logisticsdeliverysystem.service.AdminOrderService;
 import norym.logisticsdeliverysystem.service.AdminPostmanService;
 import norym.logisticsdeliverysystem.service.OrderService;
 import norym.logisticsdeliverysystem.service.PostmanOrderService;
+import norym.logisticsdeliverysystem.config.PricingProperties;
+import norym.logisticsdeliverysystem.service.PricingService;
 import norym.logisticsdeliverysystem.service.impl.AdminOrderServiceImpl;
 import norym.logisticsdeliverysystem.service.impl.AdminPostmanServiceImpl;
 import norym.logisticsdeliverysystem.service.impl.OrderServiceImpl;
 import norym.logisticsdeliverysystem.service.impl.PostmanOrderServiceImpl;
+import norym.logisticsdeliverysystem.service.impl.PricingServiceImpl;
 import norym.logisticsdeliverysystem.service.impl.RoutePlanner;
 
 import java.math.BigDecimal;
@@ -57,9 +60,11 @@ public final class FlowWorld
     private FlowWorld()
     {
         RoutePlanner planner = new RoutePlanner(edgeMapper, stationMapper);
-        this.orderService = new OrderServiceImpl(orderMapper, routeMapper, stationMapper, 600, 3);
+        PricingService pricingService = new PricingServiceImpl(
+                PricingProperties.defaults(), planner, orderMapper, routeMapper);
+        this.orderService = new OrderServiceImpl(orderMapper, routeMapper, stationMapper, pricingService, 600, 3);
         this.adminOrders = new AdminOrderServiceImpl(orderMapper, routeMapper, stationMapper, postmanMapper, planner);
-        this.postmanOrders = new PostmanOrderServiceImpl(orderMapper, routeMapper);
+        this.postmanOrders = new PostmanOrderServiceImpl(orderMapper, routeMapper, pricingService);
         this.adminPostmen = new AdminPostmanServiceImpl(postmanMapper, routeMapper);
     }
 
@@ -231,6 +236,13 @@ public final class FlowWorld
             order.setToStationId(update.getToStationId());
             order.setGoodsDesc(update.getGoodsDesc());
             order.setWeight(update.getWeight());
+            order.setVolumeCm3(update.getVolumeCm3());
+            order.setQuotedPrice(update.getQuotedPrice());
+            order.setActualVolumeCm3(null);
+            order.setActualWeight(null);
+            order.setPrice(null);
+            order.setPriceConfirmedAt(null);
+            order.setPriceConfirmedBy(null);
             order.setState(OrderState.WAITING);
             order.setRejectReason(null);
             order.setCurrentSeq(null);
@@ -325,6 +337,24 @@ public final class FlowWorld
             order.setState(to);
             return 1;
         }
+
+        @Override
+        public int confirmPrice(String orderNo, java.math.BigDecimal volumeCm3, java.math.BigDecimal weightKg,
+                                java.math.BigDecimal price, LocalDateTime now, Long postmanId)
+        {
+            DeliveryOrder order = findByOrderNo(orderNo);
+            if (order == null || (order.getState() != OrderState.SENDING && order.getState() != OrderState.DELIVERING))
+            {
+                return 0;
+            }
+            order.setActualVolumeCm3(volumeCm3);
+            order.setActualWeight(weightKg);
+            order.setPrice(price);
+            order.setPriceConfirmedAt(now);
+            order.setPriceConfirmedBy(postmanId);
+            return 1;
+        }
+
     }
 
     private final class Routes implements OrderRouteMapper

@@ -13,10 +13,33 @@ const error = ref('')
 const message = ref('')
 const trips = reactive<Record<string, string>>({})
 const couriers = reactive<Record<string, number | ''>>({})
+const selectedKey = ref('')
 
 const departures = computed(() => items.value.filter((item) => item.bucket === 'DEPART'))
 const arrivals = computed(() => items.value.filter((item) => item.bucket === 'ARRIVE'))
 const dispatches = computed(() => items.value.filter((item) => item.bucket === 'DISPATCH'))
+const queue = computed(() => [...departures.value, ...arrivals.value, ...dispatches.value])
+
+const selected = computed(() => queue.value.find((item) => keyOf(item) === selectedKey.value) ?? null)
+
+function keyOf(item: StationInboxItem) {
+  return `${item.bucket}-${item.orderNo}`
+}
+
+function bucketLabel(bucket: StationInboxItem['bucket']) {
+  if (bucket === 'DEPART') return '待发运'
+  if (bucket === 'ARRIVE') return '待到货'
+  return '待派单'
+}
+
+function open(item: StationInboxItem) {
+  selectedKey.value = keyOf(item)
+}
+
+function bindSelection() {
+  if (queue.value.some((item) => keyOf(item) === selectedKey.value)) return
+  selectedKey.value = queue.value[0] ? keyOf(queue.value[0]) : ''
+}
 
 async function load() {
   loading.value = true
@@ -31,6 +54,7 @@ async function load() {
     for (const item of inbox) {
       if (item.tripNo && !trips[item.orderNo]) trips[item.orderNo] = item.tripNo
     }
+    bindSelection()
   } catch (e) {
     error.value = e instanceof Error ? e.message : '加载失败'
   } finally {
@@ -82,9 +106,10 @@ onMounted(load)
     <header class="page-head">
       <div>
         <h1>本站待办</h1>
-        <p>只显示当前驿站要处理的单：先登记车次再发运，下一站确认到货，目的站把最后一公里派给快递员。</p>
+        <p>本站要处理的单：登记车次后发运，下一站确认到货，目的站派给快递员。</p>
       </div>
       <div class="head-actions">
+        <span class="pane-count">发运 {{ departures.length }} · 到货 {{ arrivals.length }} · 派单 {{ dispatches.length }}</span>
         <button class="ghost small" type="button" :disabled="loading" @click="load">
           {{ loading ? '刷新中…' : '刷新' }}
         </button>
@@ -94,69 +119,113 @@ onMounted(load)
     <p v-if="error" class="error" role="alert">{{ error }}</p>
     <p v-if="message" class="hint">{{ message }}</p>
 
-    <h2 style="font-size: 16px">待发运（{{ departures.length }}）</h2>
-    <div v-if="departures.length === 0" class="card" style="margin-bottom: 16px">
-      <EmptyState title="没有待发运的货" hint="路径管理员批准后，始发站会在这里看到订单。" />
-    </div>
-    <div v-else class="list" style="margin-bottom: 18px">
-      <article v-for="item in departures" :key="`d-${item.orderNo}`" class="card" style="padding: 16px">
-        <div class="route-line">
-          <span>{{ item.fromStation }}</span>
-          <span class="arrow">→</span>
-          <span>{{ item.nextStation ?? item.toStation }}</span>
-          <StatusBadge :state="item.state" />
+    <div class="workspace">
+      <div class="pane-list">
+        <div v-if="loading && queue.length === 0" class="pane-empty">
+          <p class="hint" style="margin: 0">正在读取本站待办…</p>
         </div>
-        <p class="hint" style="margin: 6px 0">{{ item.orderNo }} · 收件人 {{ item.receiverName }} · {{ item.goodsDesc ?? '货物未填写' }}</p>
-        <div class="filters">
-          <input v-model="trips[item.orderNo]" maxlength="32" placeholder="车次，例如 T001" />
-          <button class="small" type="button" :disabled="busyNo !== ''" @click="registerTrip(item)">登记车次</button>
-          <button class="small" type="button" :disabled="busyNo !== '' || !item.tripNo" @click="depart(item)">发运</button>
-        </div>
-        <p v-if="!item.tripNo" class="hint">发运前需要先登记下一段车次。</p>
-      </article>
-    </div>
 
-    <h2 style="font-size: 16px">待到货（{{ arrivals.length }}）</h2>
-    <div v-if="arrivals.length === 0" class="card" style="margin-bottom: 16px">
-      <EmptyState title="没有待确认的到货" hint="上一站发运之后，货物会出现在这里。" />
-    </div>
-    <div v-else class="list" style="margin-bottom: 18px">
-      <article v-for="item in arrivals" :key="`a-${item.orderNo}`" class="card" style="padding: 16px">
-        <div class="route-line">
-          <span>{{ item.fromStation }}</span>
-          <span class="arrow">→</span>
-          <span>{{ item.nextStation }}</span>
+        <div v-else-if="queue.length === 0" class="pane-empty">
+          <EmptyState title="本站暂时没有待办" hint="路径管理员批准后，始发站会在这里看到待发运的订单。" />
         </div>
-        <p class="hint" style="margin: 6px 0">{{ item.orderNo }} · 车次 {{ item.tripNo ?? '尚未登记' }}</p>
-        <button class="small" type="button" :disabled="busyNo !== '' || !item.tripNo" @click="arrive(item)">确认到货</button>
-        <p v-if="!item.tripNo" class="hint">出发站还没登记车次，暂时不能确认到货。</p>
-      </article>
-    </div>
 
-    <h2 style="font-size: 16px">待派单（{{ dispatches.length }}）</h2>
-    <div v-if="dispatches.length === 0" class="card">
-      <EmptyState title="没有等待派送的货" hint="货物到达目的站后，在这里指定本站快递员。" />
-    </div>
-    <div v-else class="list">
-      <article v-for="item in dispatches" :key="`c-${item.orderNo}`" class="card" style="padding: 16px">
-        <div class="route-line">
-          <span>{{ item.toStation }}</span>
-          <span class="arrow">→</span>
-          <span>收件人 {{ item.receiverName }}</span>
+        <div v-else class="list">
+          <article
+            v-for="item in queue"
+            :key="keyOf(item)"
+            class="card clickable order-row"
+            :class="{ 'is-selected': selectedKey === keyOf(item) }"
+            role="button"
+            tabindex="0"
+            @click="open(item)"
+            @keydown.enter.prevent="open(item)"
+            @keydown.space.prevent="open(item)"
+          >
+            <div style="min-width: 0">
+              <span class="bucket-tag">{{ bucketLabel(item.bucket) }}</span>
+              <div class="route-line" style="margin-top: 8px">
+                <span>{{ item.fromStation }}</span>
+                <span class="arrow">→</span>
+                <span>{{ item.nextStation ?? item.toStation }}</span>
+              </div>
+              <div class="meta">
+                <b>{{ item.orderNo }}</b>
+                <span>收件人 {{ item.receiverName }}</span>
+              </div>
+            </div>
+            <StatusBadge :state="item.state" />
+          </article>
         </div>
-        <p class="hint" style="margin: 6px 0">{{ item.orderNo }} · {{ item.receiverPhone }} · {{ item.goodsDesc ?? '货物未填写' }}</p>
-        <div class="filters">
-          <select v-model="couriers[item.orderNo]">
-            <option value="">选择快递员</option>
-            <option v-for="person in postmen" :key="person.id" :value="person.id">
-              {{ person.name }}（{{ person.username }}）
-            </option>
-          </select>
-          <button class="small" type="button" :disabled="busyNo !== '' || couriers[item.orderNo] === '' || couriers[item.orderNo] == null" @click="dispatch(item)">
-            派单
-          </button>
+      </div>
+
+      <aside class="pane-detail">
+        <div v-if="!selected" class="pane-empty">
+          <EmptyState title="从左侧选择一单" hint="登记车次、发运、确认到货或派给本站快递员，都在右侧完成。" />
         </div>
-      </article>
+
+        <template v-else>
+          <div>
+            <span class="bucket-tag">{{ bucketLabel(selected.bucket) }}</span>
+            <h2 style="margin-top: 12px">{{ selected.fromStation }} → {{ selected.nextStation ?? selected.toStation }}</h2>
+            <p class="hint">{{ selected.orderNo }} · {{ selected.goodsDesc ?? '货物未填写' }}</p>
+          </div>
+
+          <div class="kv">
+            <div>
+              <span>状态</span>
+              <b><StatusBadge :state="selected.state" /></b>
+            </div>
+            <div>
+              <span>收件人</span>
+              <b>{{ selected.receiverName }} {{ selected.receiverPhone }}</b>
+            </div>
+            <div>
+              <span>车次</span>
+              <b>{{ selected.tripNo ?? '尚未登记' }}</b>
+            </div>
+          </div>
+
+          <div v-if="selected.bucket === 'DEPART'" class="detail-block">
+            <h2>发运</h2>
+            <div class="field">
+              <label :for="`trip-${selected.orderNo}`">车次</label>
+              <input :id="`trip-${selected.orderNo}`" v-model="trips[selected.orderNo]" maxlength="32" placeholder="例如 T001" />
+            </div>
+            <div class="compose-actions">
+              <button class="small" type="button" :disabled="busyNo !== ''" @click="registerTrip(selected)">登记车次</button>
+              <button class="small" type="button" :disabled="busyNo !== '' || !selected.tripNo" @click="depart(selected)">发运</button>
+            </div>
+            <p v-if="!selected.tripNo" class="hint">发运前需要先登记下一段车次。</p>
+          </div>
+
+          <div v-else-if="selected.bucket === 'ARRIVE'" class="detail-block">
+            <h2>确认到货</h2>
+            <p class="hint">车次 {{ selected.tripNo ?? '尚未登记' }}</p>
+            <div class="compose-actions">
+              <button class="small" type="button" :disabled="busyNo !== '' || !selected.tripNo" @click="arrive(selected)">确认到货</button>
+            </div>
+            <p v-if="!selected.tripNo" class="hint">出发站还没登记车次，暂时不能确认到货。</p>
+          </div>
+
+          <div v-else class="detail-block">
+            <h2>派给快递员</h2>
+            <div class="field">
+              <label :for="`courier-${selected.orderNo}`">本站快递员</label>
+              <select :id="`courier-${selected.orderNo}`" v-model="couriers[selected.orderNo]">
+                <option value="">选择快递员</option>
+                <option v-for="person in postmen" :key="person.id" :value="person.id">
+                  {{ person.name }}（{{ person.username }}）
+                </option>
+              </select>
+            </div>
+            <div class="compose-actions">
+              <button class="small" type="button" :disabled="busyNo !== '' || couriers[selected.orderNo] === '' || couriers[selected.orderNo] == null" @click="dispatch(selected)">
+                派单
+              </button>
+            </div>
+          </div>
+        </template>
+      </aside>
     </div>
   </section>
 </template>

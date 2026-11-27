@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 export type ThemeMode = 'light' | 'dark' | 'milk'
 export const THEME_STORAGE_KEY = 'milk-design-theme'
 export const THEME_EVENT = 'milk-theme-change'
-const BROWSER_COLORS: Record<ThemeMode, string> = { light: '#e9eaee', dark: '#1c1f24', milk: '#f4f1ea' }
+const INK = '#FFFFFF'
 let current: ThemeMode = 'light'
 
 function storedTheme(value: string | null | undefined): ThemeMode {
@@ -20,48 +20,46 @@ export function invertHex(color: string): string {
 }
 
 export function getTheme(): ThemeMode {
-  if (typeof document !== 'undefined') return storedTheme(document.documentElement.dataset.theme)
   return current
 }
-export function isDark(): boolean { return getTheme() === 'dark' }
+export function isDark(): boolean { return false }
 
 /** For Canvas, WebGL inputs and chart libraries that require resolved colors. */
 export function themeColor(color: string): string {
-  if (!isDark()) return color
-  if (color.startsWith('#')) return invertHex(color)
-  if (color === 'white') return 'black'
-  if (color === 'black') return 'white'
-  const rgb = /^(rgba?)\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(\s*,\s*[^)]+)?\s*\)$/i.exec(color)
-  return rgb ? `${rgb[1]}(${[2, 3, 4].map(i => 255 - Number(rgb[i])).join(',')}${rgb[5] ?? ''})` : color
+  return color
 }
 
-function applyTheme(mode: ThemeMode) {
-  current = mode
+function applyInk() {
   if (typeof document === 'undefined') return
-  document.documentElement.dataset.theme = mode
-  document.documentElement.style.colorScheme = mode === 'dark' ? 'dark' : 'light'
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', BROWSER_COLORS[mode])
-  window.dispatchEvent(new CustomEvent(THEME_EVENT, { detail: mode }))
+  document.documentElement.dataset.theme = 'sf'
+  document.documentElement.style.colorScheme = 'light'
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', INK)
 }
 
+/** Kept for older callers; the product no longer switches paper / milk / graphite. */
 export function setTheme(mode: ThemeMode) {
-  applyTheme(mode)
+  current = mode
   try { localStorage.setItem(THEME_STORAGE_KEY, mode) } catch { /* Private/blocked storage still permits this session. */ }
+  applyInk()
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(THEME_EVENT, { detail: 'sf' }))
+  }
 }
 
 export function initTheme() {
   let mode: ThemeMode = 'light'
   try { mode = storedTheme(localStorage.getItem(THEME_STORAGE_KEY)) } catch { /* Default remains light. */ }
-  applyTheme(mode)
+  current = mode
+  applyInk()
 }
 
 export function useTheme() {
   const theme = ref<ThemeMode>(getTheme())
   const sync = () => { theme.value = getTheme() }
   const storage = (event: StorageEvent) => {
-    if (event.key === THEME_STORAGE_KEY || event.key === null) applyTheme(storedTheme(event.newValue))
+    if (event.key === THEME_STORAGE_KEY || event.key === null) current = storedTheme(event.newValue)
   }
   onMounted(() => { sync(); window.addEventListener(THEME_EVENT, sync); window.addEventListener('storage', storage) })
   onUnmounted(() => { window.removeEventListener(THEME_EVENT, sync); window.removeEventListener('storage', storage) })
-  return { theme, isDark: computed(() => theme.value === 'dark'), setTheme, toggle: () => setTheme(getTheme() === 'dark' ? 'light' : 'dark') }
+  return { theme, isDark: computed(() => false), setTheme, toggle: () => setTheme(getTheme() === 'dark' ? 'light' : 'dark') }
 }

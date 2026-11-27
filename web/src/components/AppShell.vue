@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { logout, session } from '@/stores/session'
-import { getTheme, setTheme, type ThemeMode } from '@/lib/theme-controller'
 
 const router = useRouter()
 const route = useRoute()
-const theme = ref<ThemeMode>(getTheme())
 
 const profiles = {
   path: {
@@ -21,18 +19,18 @@ const profiles = {
     ]
   },
   station: {
-    sub: '节点工作台',
+    sub: '驿站工作台',
     role: '节点管理员',
     auth: true,
     login: 'station-login',
     nav: [{ name: 'station-inbox', label: '本站待办', hint: '车次、到货、派单' }]
   },
   courier: {
-    sub: '快递员',
+    sub: '快递员工作台',
     role: '快递员',
     auth: true,
     login: 'courier-login',
-    nav: [{ name: 'courier-tasks', label: '我的任务', hint: '取件与派送' }]
+    nav: [{ name: 'courier-tasks', label: '我的任务', hint: '核价、取件与派送' }]
   },
   user: {
     sub: '寄件查询',
@@ -44,11 +42,6 @@ const profiles = {
 } as const
 
 const profile = computed(() => profiles[(route.meta.shell as keyof typeof profiles) || 'path'])
-
-function pick(mode: ThemeMode) {
-  setTheme(mode)
-  theme.value = mode
-}
 
 async function signOut() {
   await logout()
@@ -81,20 +74,6 @@ async function signOut() {
       </nav>
 
       <div class="sidebar-foot">
-        <div class="theme-pick" role="group" aria-label="配色">
-          <button
-            v-for="mode in (['light', 'milk', 'dark'] as ThemeMode[])"
-            :key="mode"
-            class="theme-dot"
-            :class="{ 'is-on': theme === mode }"
-            type="button"
-            :aria-pressed="theme === mode"
-            @click="pick(mode)"
-          >
-            {{ mode === 'light' ? '纸白' : mode === 'milk' ? '乳白' : '石墨' }}
-          </button>
-        </div>
-
         <div class="who">
           <div class="who-text">
             <strong>{{ profile.auth ? (session.user?.name ?? '未登录') : '访客' }}</strong>

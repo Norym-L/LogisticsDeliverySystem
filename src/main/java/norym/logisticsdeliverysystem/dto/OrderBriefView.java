@@ -1,5 +1,6 @@
 package norym.logisticsdeliverysystem.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -12,6 +13,9 @@ public record OrderBriefView(
         String fromStation,
         String toStation,
         LocalDateTime createTime,
-        LocalDateTime approveDeadline)
+        LocalDateTime approveDeadline,
+        BigDecimal quotedPrice,
+        BigDecimal price,
+        Boolean priceConfirmed)
 {
 }

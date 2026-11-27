@@ -1,6 +1,6 @@
 # 物流配送管理系统 · 接口文档
 
-> 版本：v1（2026-11-16）
+> 版本：v1.1（2026-11-27）
 > 后端：Spring Boot 4.1.2 + MyBatis 4.1.0 + MySQL 8（Docker，宿主机 3308）
 
 ---
@@ -77,7 +77,55 @@ http://127.0.0.1:18080/api
 
 - 时间格式为 ISO-8601，如 `2026-11-16T11:15:51`。
 - 枚举以字符串返回，如 `state = "DELIVERING"`。
-- 所有金额/重量用小数，`weight` 单位为千克。
+- 所有金额/重量用小数，`weight` 单位为千克，体积 `volumeCm3` 单位为立方厘米，运费单位为元。
+
+### 2.5 运费计价
+
+体积重 = 体积（立方厘米）÷ 6000。计费重量取实际质量与体积重的较大值，再按顺丰内地互寄规则进位：
+
+- 不足 10 kg：按 0.1 kg 向上进位
+- 10 kg 到 100 kg 以下：按 0.5 kg 向上进位
+- 100 kg 及以上：四舍五入到整千克
+- 进位后不足 1 kg 按 1 kg 首重
+
+运费 = 首重费 + max(0, 计费重量 - 1) × 续重费率，再四舍五入到整元。
+
+里程分档（配置项 `logistics.pricing`，可改）：
+
+| 里程 | 首重（1 kg） | 续重（每千克） |
+|---|---|---|
+| 200 km 及以内 | 18 元 | 5 元 |
+| 大于 200 km 且不超过 1000 km | 22 元 | 8 元 |
+| 大于 1000 km | 23 元 | 10 元 |
+
+试算与下单预估用 Dijkstra 最短路里程。快递员最终核价：若订单已批准并固化 `order_route`，用实际路线里程；否则仍用最短路。
+
+举例：北京到杭州约 1357 km，2.4 kg + 12000 立方厘米 → 体积重 2.0，计费 2.4，运费 23 + 1.4 × 10 = 37 元。上海到杭州 175 km、1 kg 小体积 → 18 元。
+
+用户下单可同时填质量和体积，系统按最短路写入预估价 `quotedPrice`，只填其中一项则不算价（体积仍可存）。最终运费由指派快递员核对后写入 `price`，路径/节点管理员只能查看，不能改价。退回单可复制申报体积并重新预估，但不沿用原单已核价的最终运费。
+
+### 2.6 运费试算（公开，不写库）
+
+```
+POST /api/pricing/quote
+```
+
+请求：`weightKg`、`volumeCm3` 必填且必须大于 0；另需提供 `fromStationId` + `toStationId`，或 `orderNo`（有单号时用该单起止站 / 已固化路线算里程，体积质量以本次请求为准）。两者都缺时返回 400。
+
+```json
+{ "weightKg": 2.4, "volumeCm3": 12000, "fromStationId": 1, "toStationId": 8 }
+```
+
+响应 `data`：
+
+```json
+{ "weightKg": 2.4, "volumeCm3": 12000, "volumetricWeightKg": 2.0,
+  "chargeableWeightKg": 2.4, "distanceKm": 1357,
+  "firstKgPrice": 23, "additionalKgPrice": 10, "additionalWeightKg": 1.4,
+  "freight": 37 }
+```
+
+有单号试算时还会带上 `orderNo`。
 
 ---
 
@@ -169,22 +217,23 @@ GET /api/station/list
 POST /api/user/orders
 ```
 
-请求（只收这 7 个字段，路线与状态由服务器生成）：
+请求（只收用户可填字段，路线与状态由服务器生成；`weight`、`volumeCm3` 可选）：
 
 ```json
 { "senderName": "张三", "senderPhone": "13700000001",
   "receiverName": "李四", "receiverPhone": "13700000002",
   "fromStationId": 1, "toStationId": 6,
-  "goodsDesc": "教材", "weight": 1.5 }
+  "goodsDesc": "教材", "weight": 1.5, "volumeCm3": 12000 }
 ```
 
-响应：
+质量和体积都大于 0 时，按最短路写入预估价。响应：
 
 ```json
 { "code": 0, "message": "ok",
   "data": { "orderNo": "LD20261116C176D09BA303",
             "state": "WAITING",
-            "approveDeadline": "2026-11-16T11:20:00" } }
+            "approveDeadline": "2026-11-16T11:20:00",
+            "volumeCm3": 12000, "quotedPrice": 33, "priceConfirmed": false } }
 ```
 
 单号规则：`LD` + `yyyyMMdd` + UUID 前 12 位，共 22 字符。
@@ -200,7 +249,8 @@ GET /api/user/orders?phone=13700000001
 ```json
 [{ "orderNo": "LD2026...", "state": "SENDING",
    "fromStation": "北京转运中心", "toStation": "上海转运中心",
-   "createTime": "2026-11-16T11:18:00" }]
+   "createTime": "2026-11-16T11:18:00",
+   "quotedPrice": 33, "priceConfirmed": false }]
 ```
 
 ### 5.4 订单详情
@@ -218,7 +268,8 @@ GET /api/user/orders/{orderNo}
   "fromStation": { "id": 1, "code": "ST001", "name": "北京转运中心" },
   "toStation":   { "id": 6, "code": "ST006", "name": "上海转运中心" },
   "currentStation": { "id": 5, "code": "ST005", "name": "南京转运中心" },
-  "goodsDesc": "教材", "weight": 1.5,
+  "goodsDesc": "教材", "weight": 1.5, "volumeCm3": 12000,
+  "quotedPrice": 33, "price": 33, "priceConfirmed": true,
   "trajectory": [
     { "seq": 1, "stationName": "北京转运中心", "status": "ARRIVED",
       "departTime": "2026-11-16T11:19:00", "arriveTime": "2026-11-16T11:18:00" },
@@ -446,19 +497,39 @@ GET /api/postman/orders?type=pending
   "tripNo": null, "departTime": null, "arriveTime": "2026-11-16T11:14:00",
   "legStatus": "ARRIVED", "lastMile": true,
   "senderName": "张三", "receiverName": "李四",
-  "receiverPhone": "13700000002", "goodsDesc": "教材" }
+  "receiverPhone": "13700000002", "goodsDesc": "教材",
+  "weight": 1.5, "volumeCm3": 12000, "quotedPrice": 33,
+  "price": 33, "priceConfirmed": true }
 ```
 
 - `lastMile` 由 `seq == forwardStationCount` 推导，不存库。
 - 快递员的 `toStationName` 是"收件人 XXX"，不是下一个驿站——他不跑干线。
 
-### 7.3 取件开始派送
+### 7.3 核对运费
+
+```
+POST /api/postman/orders/{orderNo}/price
+```
+
+仅该单指派的快递员可调。状态须为货已到目的站待取件（`SENDING` 且最后一公里）或已在派送（`DELIVERING`）。签收/拒收前可重复核对。服务器按同一公式计算最终运费并写入，不接受客户端传入的价格。
+
+请求：
+
+```json
+{ "volumeCm3": 12000, "weightKg": 2.4 }
+```
+
+响应与试算结构相同，并带上 `orderNo`、`freight`、`priceConfirmed`、`priceConfirmedAt`。
+
+### 7.4 取件开始派送
 
 ```
 POST /api/postman/orders/{orderNo}/pickup
 ```
 
-前置条件：状态 `SENDING`、货已到目的站、该单指派给本人、路段已到站。
+前置条件：状态 `SENDING`、货已到目的站、该单指派给本人、路段已到站，且已经核价。
+
+若尚未核价，请求体可附带 `volumeCm3` 和 `weightKg`，同一事务里先核价再取件；两者都没有且尚未核价时返回 400。已核价的可直接取件（请求体可省略）。
 
 成功：订单转 `DELIVERING`，同时记录取件时间。之后由收件人签收或拒收。
 
@@ -473,6 +544,7 @@ POST /api/postman/orders/{orderNo}/pickup
 起点站发运          POST /admin/orders/{no}/depart         → SENDING
 下一站确认到货      POST /admin/orders/{no}/arrive         （循环 4 次，每次先登记车次）
 目的站派快递员      POST /admin/orders/{no}/courier        {postmanId: 11}
+快递员核价          POST /postman/orders/{no}/price        {volumeCm3, weightKg}
 快递员取件          POST /postman/orders/{no}/pickup       → DELIVERING
 收件人签收          POST /user/orders/{no}/sign            → RECEIVED
 ```

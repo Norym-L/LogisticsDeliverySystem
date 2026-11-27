@@ -163,7 +163,14 @@ CREATE TABLE delivery_order
     from_station_id  BIGINT UNSIGNED NOT NULL COMMENT '始发驿站',
     to_station_id    BIGINT UNSIGNED NOT NULL COMMENT '目的驿站',
     goods_desc       VARCHAR(255)    NULL COMMENT '货物描述',
-    weight           DECIMAL(8, 2)   NULL COMMENT '重量 kg',
+    weight           DECIMAL(8, 2)   NULL COMMENT '用户申报质量 kg',
+    volume_cm3       DECIMAL(12, 2)  NULL COMMENT '用户申报体积，立方厘米',
+    quoted_price     DECIMAL(10, 2)  NULL COMMENT '下单预估价，质量和体积都有时按最短路计算',
+    actual_volume_cm3 DECIMAL(12, 2) NULL COMMENT '快递员实测体积，立方厘米',
+    actual_weight    DECIMAL(8, 2)   NULL COMMENT '快递员实测质量 kg',
+    price            DECIMAL(10, 2)  NULL COMMENT '最终运费，核价后写入',
+    price_confirmed_at DATETIME      NULL COMMENT '核价时间',
+    price_confirmed_by BIGINT UNSIGNED NULL COMMENT '核价快递员',
     state            VARCHAR(16)     NOT NULL COMMENT '订单状态',
     current_seq      INT             NULL COMMENT '已推进到 order_route 的第几站',
     current_station_id BIGINT UNSIGNED NULL COMMENT '当前所在驿站（冗余快照）',
@@ -191,7 +198,8 @@ CREATE TABLE delivery_order
                                                'DELIVERING', 'RECEIVED', 'REFUSED')),
     CONSTRAINT fk_order_from FOREIGN KEY (from_station_id) REFERENCES station (id),
     CONSTRAINT fk_order_to FOREIGN KEY (to_station_id) REFERENCES station (id),
-    CONSTRAINT fk_order_approve_by FOREIGN KEY (approve_by) REFERENCES operator (id)
+    CONSTRAINT fk_order_approve_by FOREIGN KEY (approve_by) REFERENCES operator (id),
+    CONSTRAINT fk_order_price_by FOREIGN KEY (price_confirmed_by) REFERENCES postman (id)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4 COMMENT ='配送订单';
 

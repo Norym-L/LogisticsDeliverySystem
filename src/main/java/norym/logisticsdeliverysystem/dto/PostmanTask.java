@@ -1,5 +1,6 @@
 package norym.logisticsdeliverysystem.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -24,6 +25,13 @@ public class PostmanTask
     private String receiverName;
     private String receiverPhone;
     private String goodsDesc;
+    private BigDecimal weight;
+    private BigDecimal volumeCm3;
+    private BigDecimal actualWeight;
+    private BigDecimal actualVolumeCm3;
+    private BigDecimal quotedPrice;
+    private BigDecimal price;
+    private Boolean priceConfirmed;
 
     /** 该段是否属于最后一公里：目的站那一段 */
     public boolean isLastMile()
@@ -169,5 +177,75 @@ public class PostmanTask
     public void setGoodsDesc(String goodsDesc)
     {
         this.goodsDesc = goodsDesc;
+    }
+
+    public BigDecimal getWeight()
+    {
+        return weight;
+    }
+
+    public void setWeight(BigDecimal weight)
+    {
+        this.weight = weight;
+    }
+
+    public BigDecimal getVolumeCm3()
+    {
+        return volumeCm3;
+    }
+
+    public void setVolumeCm3(BigDecimal volumeCm3)
+    {
+        this.volumeCm3 = volumeCm3;
+    }
+
+    public BigDecimal getActualWeight()
+    {
+        return actualWeight;
+    }
+
+    public void setActualWeight(BigDecimal actualWeight)
+    {
+        this.actualWeight = actualWeight;
+    }
+
+    public BigDecimal getActualVolumeCm3()
+    {
+        return actualVolumeCm3;
+    }
+
+    public void setActualVolumeCm3(BigDecimal actualVolumeCm3)
+    {
+        this.actualVolumeCm3 = actualVolumeCm3;
+    }
+
+    public BigDecimal getQuotedPrice()
+    {
+        return quotedPrice;
+    }
+
+    public void setQuotedPrice(BigDecimal quotedPrice)
+    {
+        this.quotedPrice = quotedPrice;
+    }
+
+    public BigDecimal getPrice()
+    {
+        return price;
+    }
+
+    public void setPrice(BigDecimal price)
+    {
+        this.price = price;
+    }
+
+    public Boolean getPriceConfirmed()
+    {
+        return priceConfirmed;
+    }
+
+    public void setPriceConfirmed(Boolean priceConfirmed)
+    {
+        this.priceConfirmed = priceConfirmed;
     }
 }

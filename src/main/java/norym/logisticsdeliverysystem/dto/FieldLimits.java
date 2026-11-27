@@ -12,6 +12,7 @@ public final class FieldLimits
     public static final int REASON = 255;
     public static final int TRIP_NO = 32;
     public static final BigDecimal MAX_WEIGHT = new BigDecimal("999999.99");
+    public static final BigDecimal MAX_VOLUME = new BigDecimal("9999999999.99");
 
     private FieldLimits()
     {

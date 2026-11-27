@@ -25,6 +25,9 @@ export interface OrderBrief {
   toStation: string | null
   createTime: string
   approveDeadline?: string | null
+  quotedPrice?: number | null
+  price?: number | null
+  priceConfirmed?: boolean | null
 }
 
 export interface RoutePlan {
@@ -36,6 +39,25 @@ export interface CreatedOrder {
   orderNo: string
   state: string
   approveDeadline: string
+  volumeCm3?: number | null
+  quotedPrice?: number | null
+  price?: number | null
+  priceConfirmed?: boolean | null
+}
+
+export interface PriceQuote {
+  weightKg: number
+  volumeCm3: number
+  volumetricWeightKg: number
+  chargeableWeightKg: number
+  distanceKm: number
+  firstKgPrice: number
+  additionalKgPrice: number
+  additionalWeightKg: number
+  freight: number
+  orderNo?: string | null
+  priceConfirmed?: boolean | null
+  priceConfirmedAt?: string | null
 }
 
 export interface PostmanInfo {
@@ -71,6 +93,13 @@ export interface OrderDetail {
   currentStation: StationView | null
   goodsDesc: string | null
   weight: number | null
+  volumeCm3?: number | null
+  actualWeight?: number | null
+  actualVolumeCm3?: number | null
+  quotedPrice?: number | null
+  price?: number | null
+  priceConfirmed?: boolean | null
+  priceConfirmedAt?: string | null
   trajectory: RouteNode[]
   events: {
     createdAt?: string | null
@@ -124,6 +153,13 @@ export interface PostmanTask {
   receiverName: string
   receiverPhone: string
   goodsDesc: string | null
+  weight?: number | null
+  volumeCm3?: number | null
+  actualWeight?: number | null
+  actualVolumeCm3?: number | null
+  quotedPrice?: number | null
+  price?: number | null
+  priceConfirmed?: boolean | null
 }
 
 export const STATE_LABEL: Record<string, string> = {
@@ -150,6 +186,11 @@ export function stateTone(state: string): string {
 export function formatTime(value: string | null | undefined): string {
   if (!value) return '—'
   return value.replace('T', ' ').slice(0, 16)
+}
+
+export function formatYuan(value: number | null | undefined): string {
+  if (value == null) return '—'
+  return `${value} 元`
 }
 
 export const LEG_LABEL: Record<string, string> = {
