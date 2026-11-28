@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * 轨迹地图的当前位置判定：按订单状态与 order_route 的实际到发时间计算，
- * 不接车辆 GPS。坐标取自 FlowWorld 中与 seed.sql 一致的 WGS84 值。
+ * 不接车辆 GPS。坐标取自 FlowWorld 中与 seed.sql 一致的 GCJ-02 值（高德底图）。
  */
 class TrackPositionTest
 {
@@ -45,7 +45,7 @@ class TrackPositionTest
         assertEquals("北京转运中心", position.stationName());
         assertEquals("尚未发运，等待审批", position.label());
         assertNotNull(position.latitude());
-        assertEquals(0, new BigDecimal("39.9068844").compareTo(position.latitude()));
+        assertEquals(0, new BigDecimal("39.9081515").compareTo(position.latitude()));
         assertNull(position.fromStationId());
 
         // 批准后：货还没到始发站，但位置属于始发站，不能显示在途
@@ -62,7 +62,7 @@ class TrackPositionTest
         assertEquals(BEIJING, firstNode.stationId());
         assertNotNull(firstNode.latitude());
         assertNotNull(firstNode.longitude());
-        assertEquals(0, new BigDecimal("39.9068844").compareTo(firstNode.latitude()));
+        assertEquals(0, new BigDecimal("39.9081515").compareTo(firstNode.latitude()));
 
         // 始发站确认收件并核价：仍在始发站等发运
         world.receipts.confirmReceipt(orderNo, BEIJING, 2L, null,
@@ -82,8 +82,8 @@ class TrackPositionTest
         assertEquals("运输中：北京转运中心 → 天津转运中心", position.label());
         assertEquals("北京转运中心", position.fromStationName());
         assertEquals("天津转运中心", position.toStationName());
-        assertEquals(0, new BigDecimal("39.5573380").compareTo(position.latitude()));
-        assertEquals(0, new BigDecimal("116.8100624").compareTo(position.longitude()));
+        assertEquals(0, new BigDecimal("39.5585681").compareTo(position.latitude()));
+        assertEquals(0, new BigDecimal("116.8163073").compareTo(position.longitude()));
 
         // 确认到站：位置回到天津站，下一段尚未发运
         world.adminOrders.arrive(orderNo, TIANJIN);

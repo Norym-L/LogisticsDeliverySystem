@@ -30,7 +30,7 @@ DELIMITER ;
 
 START TRANSACTION;
 
--- ---------- 0. 驿站坐标：轨迹地图依赖 WGS84 经纬度 ----------
+-- ---------- 0. 驿站坐标：轨迹地图依赖 GCJ-02 经纬度（高德底图） ----------
 CALL assert_eq((SELECT COUNT(*) FROM station
                 WHERE code BETWEEN 'ST001' AND 'ST008'
                   AND (latitude IS NULL OR longitude IS NULL)),
@@ -39,6 +39,19 @@ CALL assert_eq((SELECT COUNT(*) FROM station
                 WHERE code BETWEEN 'ST001' AND 'ST008'
                   AND (latitude NOT BETWEEN -90 AND 90 OR longitude NOT BETWEEN -180 AND 180)),
                '0', '00b 驿站经纬度在合法范围内');
+CALL assert_eq((SELECT COUNT(*)
+                FROM (SELECT 'ST001' AS code, 39.9081515 AS latitude, 116.4906138 AS longitude
+                      UNION ALL SELECT 'ST002', 39.2089846, 117.1420007
+                      UNION ALL SELECT 'ST003', 36.6645849, 117.1517746
+                      UNION ALL SELECT 'ST004', 34.7210865, 113.7089361
+                      UNION ALL SELECT 'ST005', 31.8691090, 118.8294022
+                      UNION ALL SELECT 'ST006', 31.2047244, 121.2629090
+                      UNION ALL SELECT 'ST007', 30.6370476, 114.1821401
+                      UNION ALL SELECT 'ST008', 30.2791076, 120.0259611) expected
+                         JOIN station s ON s.code = expected.code
+                WHERE s.latitude <> expected.latitude
+                   OR s.longitude <> expected.longitude),
+               '0', '00c 8 个转运中心坐标为 GCJ-02 转换值');
 
 SET @st_from = (SELECT id FROM station WHERE code = 'ST001');
 SET @st_to   = (SELECT id FROM station WHERE code = 'ST006');
@@ -318,4 +331,4 @@ CALL assert_eq((SELECT COUNT(*) FROM order_route WHERE order_id = @oid), '0', '3
 ROLLBACK;
 DROP PROCEDURE IF EXISTS assert_eq;
 
-SELECT '=== 43 条用例全部通过 ===' AS summary;
+SELECT '=== 44 条用例全部通过 ===' AS summary;

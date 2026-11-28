@@ -19,8 +19,8 @@ import java.math.BigDecimal;
  * @param seq             当前位置对应的 order_route.seq；无路线时为 0
  * @param stationId       在站时是所在站；在途时是刚发运的站；无路线时可能为始发站
  * @param stationName     同上
- * @param latitude        地图标记的 WGS84 纬度；在途为两站中点
- * @param longitude       地图标记的 WGS84 经度；在途为两站中点
+ * @param latitude        地图标记的 GCJ-02 纬度（高德坐标系）；在途为两站中点
+ * @param longitude       地图标记的 GCJ-02 经度（高德坐标系）；在途为两站中点
  * @param fromStationId   在途路段的出发站，其它模式为 null
  * @param fromStationName 在途路段的出发站名
  * @param toStationId     在途路段的下一站，其它模式为 null

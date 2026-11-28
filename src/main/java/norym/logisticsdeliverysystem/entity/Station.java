@@ -6,9 +6,9 @@ import java.time.LocalDateTime;
 /**
  * 驿站，对应 station 表。
  * <p>
- * latitude / longitude 为 WGS84 坐标，供轨迹地图使用；Leaflet + OpenStreetMap
- * 底图同为 WGS84，不需要 GCJ-02 / BD-09 偏移转换。坐标只用于地图展示，
- * 不改变站名和 address，也不代表门牌级定位。
+ * latitude / longitude 为 GCJ-02 坐标（高德坐标系），供轨迹地图使用；
+ * 与高德 JS API 2.0 底图一致，前端不再做 WGS84→GCJ-02 二次转换。
+ * 坐标只用于地图展示，不改变站名和 address，也不代表门牌级定位。
  */
 public class Station
 {

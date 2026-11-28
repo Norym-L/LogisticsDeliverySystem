@@ -10,7 +10,6 @@ import './styles/app.css'
 import './styles/tysha-fonts.css'
 import './styles/tysha.css'
 import './styles/sf.css'
-import 'leaflet/dist/leaflet.css'
 import './styles/track-map.css'
 
 import { initTheme } from './lib/theme-controller'

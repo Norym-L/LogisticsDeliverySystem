@@ -13,8 +13,8 @@ import java.time.LocalDateTime;
  * @param departTime  从本站发出的时间，尚未发运为 null
  * @param arriveTime  实际到达时间，未到达为 null
  * @param tripNo      该段承运车次
- * @param latitude    驿站 WGS84 纬度，来自 station.latitude
- * @param longitude   驿站 WGS84 经度，来自 station.longitude
+ * @param latitude    驿站 GCJ-02 纬度（高德坐标系），来自 station.latitude
+ * @param longitude   驿站 GCJ-02 经度（高德坐标系），来自 station.longitude
  */
 public record RouteNodeView(
         int seq,

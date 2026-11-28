@@ -155,17 +155,17 @@ public final class FlowWorld
         station.setCode(code);
         station.setName(name);
         station.setStatus(1);
-        // 与 sql/seed.sql 一致的 WGS84 坐标，供轨迹地图相关用例断言
+        // 与 sql/seed.sql 一致的 GCJ-02 坐标（高德底图），供轨迹地图相关用例断言
         switch (code)
         {
-            case "ST001" -> coordinates(station, "39.9068844", "116.4845489");
-            case "ST002" -> coordinates(station, "39.2077916", "117.1355758");
-            case "ST003" -> coordinates(station, "36.6641799", "117.1456723");
-            case "ST004" -> coordinates(station, "34.7221614", "113.7027748");
-            case "ST005" -> coordinates(station, "31.8711900", "118.8242900");
-            case "ST006" -> coordinates(station, "31.2067567", "121.2584826");
-            case "ST007" -> coordinates(station, "30.6394073", "114.1765693");
-            case "ST008" -> coordinates(station, "30.2815002", "120.0212235");
+            case "ST001" -> coordinates(station, "39.9081515", "116.4906138");
+            case "ST002" -> coordinates(station, "39.2089846", "117.1420007");
+            case "ST003" -> coordinates(station, "36.6645849", "117.1517746");
+            case "ST004" -> coordinates(station, "34.7210865", "113.7089361");
+            case "ST005" -> coordinates(station, "31.8691090", "118.8294022");
+            case "ST006" -> coordinates(station, "31.2047244", "121.2629090");
+            case "ST007" -> coordinates(station, "30.6370476", "114.1821401");
+            case "ST008" -> coordinates(station, "30.2791076", "120.0259611");
             default -> throw new IllegalArgumentException("未知驿站编码：" + code);
         }
         stations.add(station);

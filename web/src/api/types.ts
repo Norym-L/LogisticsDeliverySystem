@@ -17,9 +17,9 @@ export interface StationView {
   code: string
   name: string
   address?: string | null
-  /** WGS84 纬度，来自 station.latitude；缺失时不画点 */
+  /** GCJ-02 纬度（高德底图），来自 station.latitude；缺失时不画点 */
   latitude?: number | null
-  /** WGS84 经度，来自 station.longitude */
+  /** GCJ-02 经度（高德底图），来自 station.longitude */
   longitude?: number | null
 }
 
@@ -86,9 +86,9 @@ export interface RouteNode {
   departTime: string | null
   arriveTime: string | null
   tripNo: string | null
-  /** WGS84 纬度，来自 station.latitude */
+  /** GCJ-02 纬度（高德底图），来自 station.latitude */
   latitude?: number | null
-  /** WGS84 经度，来自 station.longitude */
+  /** GCJ-02 经度（高德底图），来自 station.longitude */
   longitude?: number | null
 }
 

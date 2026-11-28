@@ -1,4 +1,4 @@
-/* 轨迹地图（Leaflet + OpenStreetMap）。底图署名必须保留。 */
+/* 轨迹地图（高德 JS API 2.0 + GCJ-02）。高德 logo 与版权信息必须保留。 */
 
 .track-map {
   position: relative;
@@ -14,18 +14,21 @@
   z-index: 0;
 }
 
-.track-map .leaflet-container {
+.track-map .amap-container {
   font-family: inherit;
 }
 
-.track-map .leaflet-control-attribution {
-  background: rgba(255, 255, 255, 0.86);
-  color: #5f5f5f;
-  font-size: 10px;
-}
-
-.track-map .leaflet-control-attribution a {
-  color: #b8172a;
+.track-map__error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  margin: 0;
+  padding: 24px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--milk-muted, #5f5f5f);
 }
 
 .track-map__caption {
@@ -66,12 +69,24 @@
   text-decoration: underline;
 }
 
-/* ---------- 当前位置标记 ---------- */
-.track-marker-host {
-  background: transparent;
-  border: 0;
+/* ---------- 途经站圆点 ---------- */
+.track-station-dot {
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  border: 2px solid #dc1e32;
+  border-radius: 50%;
+  background: #fffdf8;
 }
 
+.track-station-dot.is-active {
+  width: 16px;
+  height: 16px;
+  border-width: 3px;
+  box-shadow: 0 0 0 4px rgba(220, 30, 50, 0.16);
+}
+
+/* ---------- 当前位置标记 ---------- */
 .track-marker {
   position: absolute;
   left: 0;
@@ -128,10 +143,6 @@
   animation-duration: 1.4s;
 }
 
-.track-station-tooltip {
-  font-size: 12px;
-}
-
 /* ---------- 位置模式配色 ---------- */
 .is-not-shipped {
   --track-color: #7e8388;
@@ -161,15 +172,6 @@ html[data-theme="dark"] .track-marker__label {
   background: rgba(30, 34, 40, 0.94);
   color: var(--milk-ink, #edf0f5);
   border-color: var(--milk-edge, #3a424e);
-}
-
-html[data-theme="dark"] .track-map .leaflet-control-attribution {
-  background: rgba(20, 23, 28, 0.82);
-  color: #aab3c0;
-}
-
-html[data-theme="dark"] .track-map .leaflet-control-attribution a {
-  color: #e6a5ad;
 }
 
 @keyframes track-pulse {

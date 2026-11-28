@@ -37,3 +37,11 @@ build/
 /web/node_modules/
 /web/shots/
 /src/main/resources/static/
+
+### 本地密钥（禁止入库）
+.env
+.env.local
+.env.*.local
+web/.env
+web/.env.local
+web/.env.*.local

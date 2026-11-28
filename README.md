@@ -21,7 +21,7 @@
 
 - 后端：Spring Boot 4.1.2、MyBatis 4.1.0、Spring Session（内存）、Java 21
 - 数据库：MySQL 8（Docker，宿主机端口 3308）
-- 前端：Vue 3 + TypeScript + Vite，Leaflet + OpenStreetMap 轨迹地图，设计语言为浅灰 / 乳白纸感拟物
+- 前端：Vue 3 + TypeScript + Vite，高德 JS API 2.0 轨迹地图（GCJ-02 坐标系），设计语言为浅灰 / 乳白纸感拟物
 - 构建：Maven Wrapper + npm
 
 ## 目录结构
@@ -39,10 +39,10 @@ src/main/resources/
 sql/
   schema.sql     建库建表、约束、索引
   seed.sql       8 个驿站、10 条线路、9 个操作员、16 名快递员
-  test.sql       43 条结构/生命周期断言（事务内执行，结束回滚）
-  alter_*.sql    旧库增量升级脚本（含 alter_track_map.sql 驿站经纬度）
+  test.sql       44 条结构/生命周期断言（事务内执行，结束回滚）
+  alter_*.sql    旧库增量升级脚本（含 alter_track_map.sql / alter_track_map_gcj02.sql 驿站 GCJ-02 经纬度）
 docs/API.md      接口文档
-web/             前端工程（见 web/README.md）
+web/             前端工程（见 web/README.md，高德 Key 放在 web/.env.local）
 ```
 
 ## 快速开始
@@ -52,24 +52,33 @@ web/             前端工程（见 web/README.md）
 ```bash
 mysql -h127.0.0.1 -P3308 -uroot -p < sql/schema.sql
 mysql -h127.0.0.1 -P3308 -uroot -p < sql/seed.sql
-mysql -h127.0.0.1 -P3308 -uroot -p < sql/test.sql   # 可选：应输出「43 条用例全部通过」
+mysql -h127.0.0.1 -P3308 -uroot -p < sql/test.sql   # 可选：应输出「44 条用例全部通过」
 ```
 
 已有旧库不想重建时，按顺序执行 `sql/alter_pricing.sql`、`sql/alter_final_six.sql`、
-`sql/alter_track_map.sql` 增量升级。
+`sql/alter_track_map.sql` 增量升级。若该库此前已经执行过旧版 `alter_track_map.sql`
+（库内是 WGS84 坐标），再执行 `sql/alter_track_map_gcj02.sql` 原地转换为 GCJ-02；
+两个脚本都可以重复执行。
 
 ### 2. 构建前端（必须）
+
+高德地图 Key 不写入仓库。先在本机配置：
 
 ```bash
 cd web
 npm install
-npm run build        # 产物写入 src/main/resources/static
+cp .env.example .env.local     # 然后把 VITE_AMAP_JS_API_KEY= 后面填上自己的 Web 端 JS API Key
+npm run build                  # 产物写入 src/main/resources/static
 ```
 
-> **`src/main/resources/static/` 是构建产物，没有入库。**
+`.env.local` 已被 `.gitignore` 忽略，不要提交。构建时也兼容进程环境变量
+`AMAP_JS_API_KEY`（优先级低于 `.env.local` 的 `VITE_AMAP_JS_API_KEY`）。
+未配置 Key 时地图区域会显示明确提示，不会使用任何写死的示例 Key。
+
+> **`src/main/resources/static/` 是构建产物，没有入库，且会内嵌本机的高德 Key。**
 > 从仓库拉下来后如果不执行这一步，后端只有接口，访问 `/` 是空的。
 > 需要现场改前端时用 `npm run dev`（http://127.0.0.1:5173，`/api` 走代理）。
-> 把构建产物一并提交进仓库也可以，去掉 `.gitignore` 里对应那一行即可。
+> 不要把构建产物提交进仓库，否则会把本地 Key 一起带进去。
 
 ### 3. 启动后端
 
@@ -100,7 +109,7 @@ java -jar target/LogisticsDeliverySystem-*.jar --server.port=18080
 ## 验证
 
 ```bash
-mysql -h127.0.0.1 -P3308 -uroot -p < sql/test.sql   # 43 条数据库层断言
+mysql -h127.0.0.1 -P3308 -uroot -p < sql/test.sql   # 44 条数据库层断言
 
 cd web
 node scripts/flow-check.mjs     # 登录拦截 / 批准 / 拒绝 / 刷新保持会话
@@ -122,7 +131,11 @@ node scripts/shots.mjs          # 截图到 shots/（用本机 Edge，不下载�
 6. 预计送达按"每跨一站 1 日"估算，不接真实路由预测，也不考虑节假日/天气。
 7. 派送失败只记录原因并回到目的站待再派，不做改址、转寄、二次预约。
 8. 网点查询只展示站名和地址，不提供地图导航。
-9. 轨迹地图使用 Leaflet + OpenStreetMap 公共瓦片，需要能访问 `tile.openstreetmap.org`；
-   离线/内网环境只能看到灰色底图，但站点和当前位置标记仍可显示。生产部署需遵守 OSM 使用政策并保留署名。
-10. 当前位置是站点/路段级示意，不是车辆实时 GPS；在途取相邻两站中点。
+9. 轨迹地图使用高德 JS API 2.0 官方底图（GCJ-02 坐标系），需要能访问 `webapi.amap.com`
+   及高德瓦片域名；Key 从 `web/.env.local` 的 `VITE_AMAP_JS_API_KEY` 读取（构建时也兼容
+   `AMAP_JS_API_KEY`），未配置时地图区域会提示。Key 需在高德控制台配置当前域名白名单；
+   离线/内网环境只能看到空白底图，但站点和当前位置标记逻辑不变。底图 logo 与版权信息由
+   高德 JS API 默认控件保留，不要隐藏。
+10. 当前位置是站点/路段级示意，不是车辆实时 GPS；在途取相邻两站 GCJ-02 坐标中点。
     8 个站中 7 个受公开门牌数据限制，坐标精确到道路/路口；ST008（文一西路 969 号）为门牌级。
+    原 WGS84 坐标与转换后 GCJ-02 坐标都写在 `sql/seed.sql`、`sql/alter_track_map*.sql` 注释里。
