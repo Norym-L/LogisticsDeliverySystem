@@ -81,7 +81,7 @@ async function approve() {
     await http.post(`/admin/orders/${selected.value.orderNo}/approve`, {
       stationIds: editableIds.value
     })
-    say('已批准，路线已固化')
+    say('已批准，路线已固化，等待始发站收件')
     close()
     await load()
   } catch (e) {
@@ -152,6 +152,7 @@ function addStop() {
 
 const totalKm = computed(() => (plan.value ? plan.value.totalKm.toFixed(1) : '—'))
 const stopCount = computed(() => (plan.value ? Math.max(1, plan.value.stations.length - 1) : 0))
+const planDays = computed(() => Math.max(1, editableIds.value.length - 1))
 const soonest = computed(() => {
   const deadlines = orders.value
     .map((order) => order.approveDeadline)
@@ -282,7 +283,7 @@ onUnmounted(() => window.clearInterval(clock))
           <div class="detail-block">
             <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px">
               <h2 style="margin: 0">推荐路线</h2>
-              <small class="hint">{{ stopCount }} 段 · {{ totalKm }} km</small>
+              <small class="hint">{{ stopCount }} 段 · {{ totalKm }} km · 预计 {{ planDays }} 天</small>
             </div>
 
             <p v-if="planLoading" class="hint">正在计算最短路径…</p>

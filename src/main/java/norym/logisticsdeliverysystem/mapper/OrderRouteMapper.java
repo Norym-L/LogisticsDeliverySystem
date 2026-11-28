@@ -54,4 +54,32 @@ public interface OrderRouteMapper
     java.util.List<norym.logisticsdeliverysystem.dto.PostmanTask> findTasks(
             @Param("postmanId") Long postmanId,
             @Param("orderStates") java.util.List<String> orderStates);
+
+    /** 按单号定位某快递员的最后一公里任务；不是他的单返回 null。 */
+    norym.logisticsdeliverysystem.dto.PostmanTask findTaskForPostman(
+            @Param("orderNo") String orderNo,
+            @Param("postmanId") Long postmanId);
+
+    /** 始发站待收件任务：按快递员所属站查询，状态为 AWAITING_RECEIPT。 */
+    java.util.List<norym.logisticsdeliverysystem.dto.PostmanTask> findOriginReceiptTasks(
+            @Param("stationId") Long stationId);
+
+    /** 按单号定位某始发站的待收件任务；不属于该站返回 null。 */
+    norym.logisticsdeliverysystem.dto.PostmanTask findOriginReceiptTask(
+            @Param("orderNo") String orderNo,
+            @Param("stationId") Long stationId);
+
+    /** 完成最后一公里：只有派送中路段能改为已签收/已拒收，并写入备注。 */
+    int finishLastMile(@Param("orderId") Long orderId,
+                       @Param("seq") Integer seq,
+                       @Param("status") RouteStatus status,
+                       @Param("remark") String remark);
+
+    /**
+     * 派送失败：路段回到已到站、清空取件时间与快递员，
+     * 让站点可以重新派给同一人或其他人。
+     */
+    int resetLastMile(@Param("orderId") Long orderId,
+                      @Param("seq") Integer seq,
+                      @Param("remark") String remark);
 }

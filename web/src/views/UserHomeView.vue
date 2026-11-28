@@ -45,6 +45,7 @@ watch([fromStationId, toStationId, weight, volumeCm3], async () => {
 })
 
 const phone = ref('')
+const orderNoQuery = ref('')
 const found = ref<OrderBrief[] | null>(null)
 const message = ref('')
 const error = ref('')
@@ -105,6 +106,22 @@ async function lookup() {
     busy.value = false
   }
 }
+
+async function lookupByNo() {
+  const no = orderNoQuery.value.trim()
+  if (!no || busy.value) return
+  error.value = ''
+  message.value = ''
+  busy.value = true
+  try {
+    await http.get(`/user/orders/${encodeURIComponent(no)}`)
+    await router.push({ name: 'user-order', params: { orderNo: no } })
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : '没有找到该运单'
+  } finally {
+    busy.value = false
+  }
+}
 </script>
 
 <template>
@@ -112,7 +129,7 @@ async function lookup() {
     <header class="page-head">
       <div>
         <h1>寄件</h1>
-        <p>填写收寄信息即可下单，无需注册；凭手机号查单，凭收件人手机号签收。</p>
+        <p>填写收寄信息即可下单，无需注册；凭手机号或运单号查件，凭收件人手机号签收。</p>
       </div>
     </header>
 
@@ -186,10 +203,16 @@ async function lookup() {
         </form>
 
         <div v-else style="margin-top: 24px">
-          <form class="filters" @submit.prevent="lookup">
+          <form class="filters" @submit.prevent="lookupByNo">
+            <label class="hint" for="lookup-order-no">运单号</label>
+            <input id="lookup-order-no" v-model="orderNoQuery" placeholder="例如 LD20261116…" maxlength="32" />
+            <button class="small" type="submit" :disabled="busy">查件</button>
+          </form>
+
+          <form class="filters" style="margin-top: 12px" @submit.prevent="lookup">
             <label class="hint" for="lookup-phone">手机号</label>
             <input id="lookup-phone" v-model="phone" placeholder="寄件人或收件人手机号" maxlength="11" />
-            <button class="small" type="submit" :disabled="busy">查询</button>
+            <button class="small ghost" type="submit" :disabled="busy">按手机号查询</button>
           </form>
 
           <EmptyState v-if="found && found.length === 0" title="没有相关订单" hint="手机号需要和寄件人或收件人完全一致。" />
@@ -235,6 +258,10 @@ async function lookup() {
                 <span>计费重量</span>
                 <b>{{ quote.chargeableWeightKg }} kg</b>
               </div>
+              <div v-if="quote.estimatedDays">
+                <span>预计时效</span>
+                <b>{{ quote.estimatedDays }} 天</b>
+              </div>
             </div>
             <div class="fare-total">
               <span>预估价</span>
@@ -243,7 +270,7 @@ async function lookup() {
           </template>
           <p v-else-if="quoteError" class="error" role="alert">{{ quoteError }}</p>
           <p v-else class="hint">起止站、质量和体积都填写后，会按现有计价规则试算。</p>
-          <p class="fare-note">最终价由快递员取件时核对。</p>
+          <p class="fare-note">最终运费在始发站确认收件并核价后锁定。</p>
         </div>
 
         <div v-else class="pane-empty">

@@ -29,6 +29,12 @@ public interface OrderService
     /** 收件人拒收：原单终结，同时生成一张走同样审批流程的退回单 */
     CreatedOrderView refuse(String orderNo, String receiverPhone, String reason);
 
+    /**
+     * 寄件人取消：仅首次发运前（WAITING / 待始发收件 / 已收件待发运）可取消，
+     * 用寄件人手机号确认身份。
+     */
+    void cancel(String orderNo, String senderPhone);
+
     /** 被拒后修改信息重提 */
     void resubmit(String orderNo, OrderFormRequest request);
 

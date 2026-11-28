@@ -41,6 +41,12 @@ const router = createRouter({
       meta: { public: true, shell: 'user' }
     },
     {
+      path: '/stations',
+      name: 'stations',
+      component: () => import('@/views/StationListView.vue'),
+      meta: { public: true, shell: 'user' }
+    },
+    {
       path: '/station/login',
       name: 'station-login',
       component: () => import('@/views/LoginView.vue'),

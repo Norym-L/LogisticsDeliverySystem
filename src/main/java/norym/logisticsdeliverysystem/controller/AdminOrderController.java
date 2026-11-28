@@ -7,14 +7,17 @@ import norym.logisticsdeliverysystem.dto.ApiResult;
 import norym.logisticsdeliverysystem.dto.ApproveRequest;
 import norym.logisticsdeliverysystem.dto.AssignCourierRequest;
 import norym.logisticsdeliverysystem.dto.AssignTripRequest;
+import norym.logisticsdeliverysystem.dto.ConfirmPriceRequest;
 import norym.logisticsdeliverysystem.dto.OrderBriefView;
 import norym.logisticsdeliverysystem.dto.OrderDetailView;
+import norym.logisticsdeliverysystem.dto.PriceQuoteView;
 import norym.logisticsdeliverysystem.dto.RejectRequest;
 import norym.logisticsdeliverysystem.dto.RoutePlanView;
 import norym.logisticsdeliverysystem.dto.StationInboxItem;
 import norym.logisticsdeliverysystem.exception.ApiException;
 import norym.logisticsdeliverysystem.service.AdminOrderService;
 import norym.logisticsdeliverysystem.service.OrderService;
+import norym.logisticsdeliverysystem.service.ReceiptService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,11 +40,14 @@ public class AdminOrderController
 {
     private final AdminOrderService adminOrderService;
     private final OrderService orderService;
+    private final ReceiptService receiptService;
 
-    public AdminOrderController(AdminOrderService adminOrderService, OrderService orderService)
+    public AdminOrderController(AdminOrderService adminOrderService, OrderService orderService,
+                                ReceiptService receiptService)
     {
         this.adminOrderService = adminOrderService;
         this.orderService = orderService;
+        this.receiptService = receiptService;
     }
 
     /** 检查请求：待审批订单列表 */
@@ -99,6 +105,20 @@ public class AdminOrderController
         requireRole(user, Role.PATH_ADMIN);
         adminOrderService.reject(orderNo, request == null ? null : request.reason());
         return ApiResult.ok();
+    }
+
+    /**
+     * 始发站确认收件并核价：批准后的第一步，未完成前不能登记车次/发运。
+     * 体积和质量可省略，省略时使用用户申报值；申报值也不完整则返回 400。
+     */
+    @PostMapping("/{orderNo}/receive")
+    public ApiResult<PriceQuoteView> receive(@PathVariable("orderNo") String orderNo,
+                                             @RequestBody(required = false) ConfirmPriceRequest request,
+                                             @SessionAttribute(name = AuthService.SESSION_KEY, required = false) SessionUser user)
+    {
+        requireRole(user, Role.STATION_ADMIN);
+        return ApiResult.ok(receiptService.confirmReceipt(
+                orderNo, user.stationId(), user.id(), null, request));
     }
 
     /** 中转段指派车次 */

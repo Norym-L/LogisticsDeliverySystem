@@ -18,6 +18,7 @@ import norym.logisticsdeliverysystem.service.AdminOrderService;
 import norym.logisticsdeliverysystem.service.AdminPostmanService;
 import norym.logisticsdeliverysystem.service.OrderService;
 import norym.logisticsdeliverysystem.service.PostmanOrderService;
+import norym.logisticsdeliverysystem.service.ReceiptService;
 import norym.logisticsdeliverysystem.config.PricingProperties;
 import norym.logisticsdeliverysystem.service.PricingService;
 import norym.logisticsdeliverysystem.service.impl.AdminOrderServiceImpl;
@@ -25,6 +26,7 @@ import norym.logisticsdeliverysystem.service.impl.AdminPostmanServiceImpl;
 import norym.logisticsdeliverysystem.service.impl.OrderServiceImpl;
 import norym.logisticsdeliverysystem.service.impl.PostmanOrderServiceImpl;
 import norym.logisticsdeliverysystem.service.impl.PricingServiceImpl;
+import norym.logisticsdeliverysystem.service.impl.ReceiptServiceImpl;
 import norym.logisticsdeliverysystem.service.impl.RoutePlanner;
 
 import java.math.BigDecimal;
@@ -56,6 +58,7 @@ public final class FlowWorld
     public final AdminOrderService adminOrders;
     public final PostmanOrderService postmanOrders;
     public final AdminPostmanService adminPostmen;
+    public final ReceiptService receipts;
 
     private FlowWorld()
     {
@@ -66,6 +69,7 @@ public final class FlowWorld
         this.adminOrders = new AdminOrderServiceImpl(orderMapper, routeMapper, stationMapper, postmanMapper, planner);
         this.postmanOrders = new PostmanOrderServiceImpl(orderMapper, routeMapper, pricingService);
         this.adminPostmen = new AdminPostmanServiceImpl(postmanMapper, routeMapper);
+        this.receipts = new ReceiptServiceImpl(orderMapper, routeMapper, postmanMapper, pricingService);
     }
 
     public static FlowWorld seed()
@@ -89,6 +93,14 @@ public final class FlowWorld
         world.edge(5, 7, "540");
         world.edge(5, 8, "280");
         world.edge(6, 8, "175");
+
+        Postman originCourier = new Postman();
+        originCourier.setId(1L);
+        originCourier.setUsername("pm001");
+        originCourier.setName("何京生");
+        originCourier.setStationId(1L);
+        originCourier.setStatus(1);
+        world.postmen.add(originCourier);
 
         Postman courier = new Postman();
         courier.setId(11L);
@@ -220,6 +232,56 @@ public final class FlowWorld
         }
 
         @Override
+        public int cancel(String orderNo, String senderPhone, LocalDateTime now)
+        {
+            DeliveryOrder order = findByOrderNo(orderNo);
+            if (order == null || !senderPhone.equals(order.getSenderPhone()))
+            {
+                return 0;
+            }
+            if (order.getState() != OrderState.WAITING
+                    && order.getState() != OrderState.AWAITING_RECEIPT
+                    && order.getState() != OrderState.APPROVED)
+            {
+                return 0;
+            }
+            boolean departed = routes.stream()
+                    .anyMatch(r -> order.getId().equals(r.getOrderId()) && r.getDepartTime() != null);
+            if (departed)
+            {
+                return 0;
+            }
+            order.setState(OrderState.CANCELLED);
+            order.setCancelTime(now);
+            return 1;
+        }
+
+        @Override
+        public int deliverSuccess(String orderNo, LocalDateTime now)
+        {
+            DeliveryOrder order = findByOrderNo(orderNo);
+            if (order == null || order.getState() != OrderState.DELIVERING)
+            {
+                return 0;
+            }
+            order.setState(OrderState.RECEIVED);
+            order.setReceiveTime(now);
+            return 1;
+        }
+
+        @Override
+        public int deliveryFailed(String orderNo)
+        {
+            DeliveryOrder order = findByOrderNo(orderNo);
+            if (order == null || order.getState() != OrderState.DELIVERING)
+            {
+                return 0;
+            }
+            order.setState(OrderState.SENDING);
+            return 1;
+        }
+
+        @Override
         public int resubmit(DeliveryOrder update, LocalDateTime deadline, int maxResubmit)
         {
             DeliveryOrder order = findByOrderNo(update.getOrderNo());
@@ -271,6 +333,12 @@ public final class FlowWorld
         }
 
         @Override
+        public List<norym.logisticsdeliverysystem.dto.StationInboxItem> findPendingReceipt(Long stationId)
+        {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public List<norym.logisticsdeliverysystem.dto.StationInboxItem> findPendingArrive(Long stationId)
         {
             throw new UnsupportedOperationException();
@@ -290,12 +358,32 @@ public final class FlowWorld
             {
                 return 0;
             }
-            order.setState(OrderState.APPROVED);
+            order.setState(OrderState.AWAITING_RECEIPT);
             order.setApproveBy(operatorId);
             order.setApproveTime(now);
             order.setForwardStationCount(stationCount);
             order.setCurrentSeq(1);
             order.setCurrentStationId(fromStationId);
+            return 1;
+        }
+
+        @Override
+        public int confirmReceipt(String orderNo, LocalDateTime now, BigDecimal volumeCm3,
+                                  BigDecimal weightKg, BigDecimal price, Long postmanId, Long operatorId)
+        {
+            DeliveryOrder order = findByOrderNo(orderNo);
+            if (order == null || order.getState() != OrderState.AWAITING_RECEIPT)
+            {
+                return 0;
+            }
+            order.setState(OrderState.APPROVED);
+            order.setReceiptConfirmedAt(now);
+            order.setActualVolumeCm3(volumeCm3);
+            order.setActualWeight(weightKg);
+            order.setPrice(price);
+            order.setPriceConfirmedAt(now);
+            order.setPriceConfirmedBy(postmanId);
+            order.setPriceConfirmedOperator(operatorId);
             return 1;
         }
 
@@ -477,9 +565,102 @@ public final class FlowWorld
                 task.setSeq(route.getSeq());
                 task.setForwardStationCount(order.getForwardStationCount());
                 task.setLegStatus(route.getStatus() == null ? null : route.getStatus().name());
+                task.setTaskType("DELIVERY");
+                task.setRemark(route.getRemark());
                 tasks.add(task);
             }
             return tasks;
+        }
+
+        @Override
+        public PostmanTask findTaskForPostman(String orderNo, Long postmanId)
+        {
+            DeliveryOrder order = orders.stream()
+                    .filter(o -> orderNo.equals(o.getOrderNo()))
+                    .findFirst()
+                    .orElse(null);
+            if (order == null || order.getForwardStationCount() == null)
+            {
+                return null;
+            }
+            OrderRoute route = findByOrderIdAndSeq(order.getId(), order.getForwardStationCount());
+            if (route == null || !postmanId.equals(route.getPostmanId()))
+            {
+                return null;
+            }
+            PostmanTask task = new PostmanTask();
+            task.setOrderNo(order.getOrderNo());
+            task.setOrderState(order.getState().name());
+            task.setSeq(route.getSeq());
+            task.setForwardStationCount(order.getForwardStationCount());
+            task.setLegStatus(route.getStatus() == null ? null : route.getStatus().name());
+            task.setTaskType("DELIVERY");
+            task.setRemark(route.getRemark());
+            return task;
+        }
+
+        @Override
+        public List<PostmanTask> findOriginReceiptTasks(Long stationId)
+        {
+            return orders.stream()
+                    .filter(order -> order.getState() == OrderState.AWAITING_RECEIPT)
+                    .filter(order -> stationId.equals(order.getFromStationId()))
+                    .map(this::receiptTask)
+                    .toList();
+        }
+
+        @Override
+        public PostmanTask findOriginReceiptTask(String orderNo, Long stationId)
+        {
+            return orders.stream()
+                    .filter(order -> orderNo.equals(order.getOrderNo()))
+                    .filter(order -> order.getState() == OrderState.AWAITING_RECEIPT)
+                    .filter(order -> stationId.equals(order.getFromStationId()))
+                    .map(this::receiptTask)
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        private PostmanTask receiptTask(DeliveryOrder order)
+        {
+            PostmanTask task = new PostmanTask();
+            task.setOrderNo(order.getOrderNo());
+            task.setOrderState(order.getState().name());
+            task.setSeq(1);
+            task.setForwardStationCount(order.getForwardStationCount());
+            task.setLegStatus(RouteStatus.PENDING.name());
+            task.setTaskType("RECEIVE");
+            task.setWeight(order.getWeight());
+            task.setVolumeCm3(order.getVolumeCm3());
+            return task;
+        }
+
+        @Override
+        public int finishLastMile(Long orderId, Integer seq, RouteStatus status, String remark)
+        {
+            OrderRoute route = findByOrderIdAndSeq(orderId, seq);
+            if (route == null || route.getStatus() != RouteStatus.DELIVERING)
+            {
+                return 0;
+            }
+            route.setStatus(status);
+            route.setRemark(remark);
+            return 1;
+        }
+
+        @Override
+        public int resetLastMile(Long orderId, Integer seq, String remark)
+        {
+            OrderRoute route = findByOrderIdAndSeq(orderId, seq);
+            if (route == null || route.getStatus() != RouteStatus.DELIVERING)
+            {
+                return 0;
+            }
+            route.setStatus(RouteStatus.ARRIVED);
+            route.setDepartTime(null);
+            route.setPostmanId(null);
+            route.setRemark(remark);
+            return 1;
         }
     }
 

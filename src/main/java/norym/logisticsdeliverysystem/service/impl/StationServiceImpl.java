@@ -21,7 +21,7 @@ public class StationServiceImpl implements StationService
     public List<StationView> list()
     {
         return stationMapper.findAll().stream()
-                .map(s -> new StationView(s.getId(), s.getCode(), s.getName()))
+                .map(s -> new StationView(s.getId(), s.getCode(), s.getName(), s.getAddress()))
                 .toList();
     }
 }

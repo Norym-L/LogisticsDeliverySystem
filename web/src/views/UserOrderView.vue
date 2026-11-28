@@ -2,7 +2,8 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { http } from '@/api/client'
-import { formatYuan, type OrderDetail, type OrderStatus, type PriceQuote, type StationView } from '@/api/types'
+import { formatTime, formatYuan, type OrderDetail, type OrderStatus, type PriceQuote, type StationView } from '@/api/types'
+import OrderQrCode from '@/components/OrderQrCode.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import Trajectory from '@/components/Trajectory.vue'
 
@@ -16,6 +17,8 @@ const busy = ref(false)
 
 const receiverPhone = ref('')
 const refuseReason = ref('')
+const cancelPhone = ref('')
+const qrContent = ref('')
 const senderName = ref('')
 const senderPhone = ref('')
 const receiverName = ref('')
@@ -31,6 +34,9 @@ let quoteSeq = 0
 
 const orderNo = computed(() => String(route.params.orderNo ?? ''))
 const isReturn = computed(() => Boolean(detail.value?.originalOrderNo))
+const canCancel = computed(() =>
+  detail.value != null
+  && ['WAITING', 'AWAITING_RECEIPT', 'APPROVED'].includes(detail.value.state))
 let timer: number | undefined
 
 function stopPoll() {
@@ -74,6 +80,10 @@ async function load() {
   error.value = ''
   detail.value = await http.get<OrderDetail>(`/user/orders/${encodeURIComponent(orderNo.value)}`)
   fillForm(detail.value)
+  qrContent.value = ''
+  http.get<{ content: string }>(`/user/orders/${encodeURIComponent(orderNo.value)}/qrcode`)
+    .then((code) => { qrContent.value = code.content })
+    .catch(() => undefined)
   if (detail.value.state === 'REJECTED') {
     await ensureStations()
   }
@@ -185,6 +195,25 @@ async function resubmit() {
     busy.value = false
   }
 }
+
+async function cancelOrder() {
+  if (busy.value || !detail.value) return
+  busy.value = true
+  error.value = ''
+  message.value = ''
+  try {
+    await http.post(`/user/orders/${detail.value.orderNo}/cancel`, {
+      senderPhone: cancelPhone.value.trim()
+    })
+    message.value = '订单已取消'
+    stopPoll()
+    await load()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : '取消失败'
+  } finally {
+    busy.value = false
+  }
+}
 </script>
 
 <template>
@@ -235,6 +264,10 @@ async function resubmit() {
             <span>目的站</span>
             <b>{{ detail.toStation?.name ?? '—' }}</b>
           </div>
+          <div v-if="detail.estimatedDays">
+            <span>预计时效</span>
+            <b>{{ detail.estimatedDays }} 天<template v-if="detail.estimatedDeliveryAt"> · {{ formatTime(detail.estimatedDeliveryAt) }}</template></b>
+          </div>
           <div>
             <span>货物</span>
             <b>{{ detail.goodsDesc ?? '—' }} · {{ detail.weight ?? '—' }} kg<template v-if="detail.volumeCm3 != null"> · {{ detail.volumeCm3 }} cm³</template></b>
@@ -242,6 +275,12 @@ async function resubmit() {
         </div>
 
         <p v-if="detail.rejectReason" class="hint">拒绝原因：{{ detail.rejectReason }}</p>
+        <p v-if="detail.state === 'CANCELLED'" class="hint">
+          订单已取消<template v-if="detail.events.cancelledAt">（{{ formatTime(detail.events.cancelledAt) }}）</template>。
+        </p>
+        <p v-if="detail.state === 'AWAITING_RECEIPT'" class="hint">
+          路线已批准，等待始发站确认收件并核价。
+        </p>
 
         <div class="detail-block">
           <h2>轨迹</h2>
@@ -320,6 +359,10 @@ async function resubmit() {
               <span>最终运费</span>
               <b>{{ detail.priceConfirmed ? formatYuan(detail.price) : '尚未核价' }}</b>
             </div>
+            <div v-if="detail.estimatedDays">
+              <span>预计时效</span>
+              <b>{{ detail.estimatedDays }} 天</b>
+            </div>
           </div>
           <template v-if="detail.state === 'REJECTED' && quote">
             <div class="fare-total">
@@ -335,11 +378,29 @@ async function resubmit() {
                 <span>计费重量</span>
                 <b>{{ quote.chargeableWeightKg }} kg</b>
               </div>
+              <div v-if="quote.estimatedDays">
+                <span>预计时效</span>
+                <b>{{ quote.estimatedDays }} 天</b>
+              </div>
             </div>
           </template>
           <p v-else-if="detail.state === 'REJECTED' && quoteError" class="error" role="alert">{{ quoteError }}</p>
-          <p class="fare-note">最终运费由快递员取件时核对。</p>
+          <p class="fare-note">最终运费在始发站确认收件并核价后锁定，目的站不再改价。</p>
         </div>
+
+        <OrderQrCode v-if="qrContent" :content="qrContent" :label="`订单 ${detail.orderNo} 二维码`" />
+
+        <form v-if="canCancel" class="login-form detail-block" @submit.prevent="cancelOrder">
+          <h2>取消订单</h2>
+          <p class="hint">订单首次发运前可取消；已发运、派送中、已签收或已拒收的订单不能取消。</p>
+          <div class="field">
+            <label for="cancel-phone">寄件人手机号</label>
+            <input id="cancel-phone" v-model="cancelPhone" required maxlength="11" placeholder="用于确认寄件人身份" />
+          </div>
+          <div class="compose-actions">
+            <button class="ghost small" type="submit" :disabled="busy">取消订单</button>
+          </div>
+        </form>
 
         <form v-if="detail.state === 'DELIVERING'" class="login-form detail-block" @submit.prevent="sign">
           <h2>签收或拒收</h2>

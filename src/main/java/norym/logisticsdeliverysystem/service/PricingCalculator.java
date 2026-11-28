@@ -69,6 +69,7 @@ public class PricingCalculator
                 freight,
                 null,
                 null,
+                null,
                 null);
     }
 

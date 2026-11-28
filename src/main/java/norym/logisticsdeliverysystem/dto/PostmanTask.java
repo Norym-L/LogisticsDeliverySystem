@@ -33,6 +33,11 @@ public class PostmanTask
     private BigDecimal price;
     private Boolean priceConfirmed;
 
+    /** DELIVERY 最后一公里；RECEIVE 始发站待收件。由 SQL 标记，便于前端区分操作。 */
+    private String taskType;
+    /** 最近一次派送失败原因等备注，展示给快递员/站点。 */
+    private String remark;
+
     /** 该段是否属于最后一公里：目的站那一段 */
     public boolean isLastMile()
     {
@@ -247,5 +252,25 @@ public class PostmanTask
     public void setPriceConfirmed(Boolean priceConfirmed)
     {
         this.priceConfirmed = priceConfirmed;
+    }
+
+    public String getTaskType()
+    {
+        return taskType;
+    }
+
+    public void setTaskType(String taskType)
+    {
+        this.taskType = taskType;
+    }
+
+    public String getRemark()
+    {
+        return remark;
+    }
+
+    public void setRemark(String remark)
+    {
+        this.remark = remark;
     }
 }

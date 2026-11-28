@@ -12,9 +12,9 @@
 --      偏离计划路线，一行同时记录"计划何时到"和"实际何时到"。
 --   4. 车次属于某一段运输而非整单，故落在 order_route.arrive_trip_no。
 --      若放在订单表，后一个中转站分配的车次会覆盖前一段的记录。
---   5. 拒收原路退回：回程不另建表也不另建序列，直接接在 order_route 的
---      seq 之后（去程 1..n，回程 n+1..2n-1，站点逆序）。于是"取下一节点"
---      永远是 seq = current_seq + 1，去程与回程复用同一套推进逻辑。
+--   5. 拒收不追加回程路线，而是生成一张方向相反的独立退回单，
+--      退回单从 WAITING 开始走同一套审批、收件、运输与派送流程。
+--      原单在拒收时以 REFUSED 终结，order_route 只保留去程 1..n。
 -- =============================================================
 
 CREATE DATABASE IF NOT EXISTS logistics
@@ -133,14 +133,17 @@ CREATE TABLE postman
 --
 --    state 取值：
 --      WAITING    待审批（发起后进入，等待路径管理员处理）
---      APPROVED   已批准（路线已固化，等待起点站发运）
+--      AWAITING_RECEIPT 已批准，等待始发站确认收件（尚未发运）
+--      APPROVED   始发站已确认收件并完成核价，等待首次发运
 --      REJECTED   已拒绝（管理员拒绝或审批超时）。不是终态：
 --                 用户可修改收寄信息后重提，状态回到 WAITING，
 --                 重提次数记在 resubmit_count，业务层据此设上限。
---      SENDING    运送中（含"已到目的站、等待快递员取件"）
+--      SENDING    运送中（含"已到目的站、等待快递员取件"、派送失败退回待再派）
 --      DELIVERING 派送中（快递员已取件，最后一公里）
 --      RECEIVED   已签收（终态）
 --      REFUSED    已拒收（终态）
+--      CANCELLED  已取消（终态）：仅 WAITING / AWAITING_RECEIPT / APPROVED
+--                 且首次发运前可取消
 --
 --    拒收不追加回程路线，而是生成一张**退回单**：方向相反的独立订单，
 --    走同一套审批与运输流程，原单以 REFUSED 终结。
@@ -170,7 +173,9 @@ CREATE TABLE delivery_order
     actual_weight    DECIMAL(8, 2)   NULL COMMENT '快递员实测质量 kg',
     price            DECIMAL(10, 2)  NULL COMMENT '最终运费，核价后写入',
     price_confirmed_at DATETIME      NULL COMMENT '核价时间',
-    price_confirmed_by BIGINT UNSIGNED NULL COMMENT '核价快递员',
+    price_confirmed_by BIGINT UNSIGNED NULL COMMENT '核价快递员（始发站收件时由快递员核价）',
+    price_confirmed_operator BIGINT UNSIGNED NULL COMMENT '核价操作员（始发站收件时由节点管理员核价）',
+    receipt_confirmed_at DATETIME    NULL COMMENT '始发站确认收件时间',
     state            VARCHAR(16)     NOT NULL COMMENT '订单状态',
     current_seq      INT             NULL COMMENT '已推进到 order_route 的第几站',
     current_station_id BIGINT UNSIGNED NULL COMMENT '当前所在驿站（冗余快照）',
@@ -181,7 +186,8 @@ CREATE TABLE delivery_order
     refuse_reason    VARCHAR(255)    NULL COMMENT '收件人拒收原因',
     refuse_time      DATETIME        NULL COMMENT '拒收时间',
     receive_time     DATETIME        NULL COMMENT '签收时间',
-    forward_station_count INT        NULL COMMENT '去程站数；seq<=此值为去程，>为回程',
+    cancel_time      DATETIME        NULL COMMENT '用户取消时间',
+    forward_station_count INT        NULL COMMENT '去程站数（= 路线最后一行 seq）',
     resubmit_count   INT             NOT NULL DEFAULT 0 COMMENT '被拒后修改重提的次数，业务层限制上限',
     return_of        VARCHAR(32)     NULL COMMENT '退回单记录的原单号，普通订单为空',
     version          INT             NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
@@ -194,12 +200,14 @@ CREATE TABLE delivery_order
     KEY idx_state_deadline (state, approve_deadline),
     KEY idx_current_station (current_station_id, state),
     KEY idx_return_of (return_of),
-    CONSTRAINT ck_order_state CHECK (state IN ('WAITING', 'APPROVED', 'REJECTED', 'SENDING',
-                                               'DELIVERING', 'RECEIVED', 'REFUSED')),
+    CONSTRAINT ck_order_state CHECK (state IN ('WAITING', 'AWAITING_RECEIPT', 'APPROVED', 'REJECTED',
+                                               'SENDING', 'DELIVERING', 'RECEIVED', 'REFUSED',
+                                               'CANCELLED')),
     CONSTRAINT fk_order_from FOREIGN KEY (from_station_id) REFERENCES station (id),
     CONSTRAINT fk_order_to FOREIGN KEY (to_station_id) REFERENCES station (id),
     CONSTRAINT fk_order_approve_by FOREIGN KEY (approve_by) REFERENCES operator (id),
-    CONSTRAINT fk_order_price_by FOREIGN KEY (price_confirmed_by) REFERENCES postman (id)
+    CONSTRAINT fk_order_price_by FOREIGN KEY (price_confirmed_by) REFERENCES postman (id),
+    CONSTRAINT fk_order_price_operator FOREIGN KEY (price_confirmed_operator) REFERENCES operator (id)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4 COMMENT ='配送订单';
 
@@ -211,13 +219,12 @@ CREATE TABLE delivery_order
 --    批准时由路径管理员确定（系统给最短路径建议，允许调整，但必须连通），
 --    确认后整条路线固化写入，实际运输不得偏离。
 --
---    拒收原路退回：回程接在同一序列之后，站点逆序，
---      seq n+1 = 目的站的上一站 … seq 2n-1 = 始发站。
---      一张表同时承载去程与回程，current_seq 单调递增，
---      "取下一节点" 永远是 seq = current_seq + 1，两段共用同一套代码。
+--    批准后先固化去程路线；订单还需始发站确认收件并核价，才允许首次发运。
+--    拒收后不追加回程路线，而是生成一张方向相反的独立退回单。
+--    seq 只表示本单的去程 1..n，current_seq 单调递增，
+--    "取下一节点" 永远是 seq = current_seq + 1。
 --
 --    forward_station_count：去程站数（= 最后一行的 seq），用于判断是否已到达目的站。
---    seq 只表示去程；拒收退回由独立退回单承载，不在这里追加回程行。
 --
 --    arrive_trip_no：该段承运车次。中转段由车次承运，不指派快递员；
 --                    postman_id 只在目的站那一行有值，表示最后一公里的快递员。

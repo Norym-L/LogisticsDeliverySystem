@@ -145,6 +145,10 @@ public class OrderServiceImpl implements OrderService
                     route.getArriveTripNo()));
         }
         DeliveryOrder returnOrder = orderMapper.findByReturnOf(order.getOrderNo());
+        int estimatedDays = pricingService.estimateDaysForOrder(order);
+        LocalDateTime estimatedDeliveryAt = order.getCreateTime() == null
+                ? null
+                : order.getCreateTime().plusDays(estimatedDays);
 
         return new OrderDetailView(
                 order.getOrderNo(),
@@ -154,6 +158,8 @@ public class OrderServiceImpl implements OrderService
                 toView(stations, order.getFromStationId()),
                 toView(stations, order.getToStationId()),
                 toView(stations, order.getCurrentStationId()),
+                estimatedDays,
+                estimatedDeliveryAt,
                 order.getGoodsDesc(), order.getWeight(),
                 order.getVolumeCm3(),
                 order.getActualWeight(),
@@ -164,7 +170,8 @@ public class OrderServiceImpl implements OrderService
                 order.getPriceConfirmedAt(),
                 trajectory,
                 new OrderDetailView.Events(order.getCreateTime(), order.getApproveTime(),
-                        order.getReceiveTime(), order.getRefuseTime()),
+                        order.getReceiptConfirmedAt(),
+                        order.getReceiveTime(), order.getRefuseTime(), order.getCancelTime()),
                 order.getRejectReason(),
                 order.getRefuseReason(),
                 returnOrder == null ? null : returnOrder.getOrderNo(),
@@ -207,9 +214,13 @@ public class OrderServiceImpl implements OrderService
         int rows = orderMapper.sign(orderNo, receiverPhone.trim(), LocalDateTime.now());
         if (rows == 0)
         {
-            throw new ApiException(409, "签收失败，订单状态已变化");
+            throw new ApiException(409, "签收失败，订单状态已变化或已被快递员妥投");
         }
-        routeMapper.updateStatus(order.getId(), order.getCurrentSeq(), RouteStatus.SIGNED);
+        if (routeMapper.finishLastMile(order.getId(), order.getCurrentSeq(),
+                RouteStatus.SIGNED, "收件人自助签收") == 0)
+        {
+            throw new ApiException(409, "签收失败，路段状态已变化");
+        }
     }
 
     @Override
@@ -239,8 +250,46 @@ public class OrderServiceImpl implements OrderService
             throw new ApiException(409, "拒收失败，订单状态已变化");
         }
 
-        routeMapper.updateStatus(order.getId(), order.getCurrentSeq(), RouteStatus.REFUSED);
+        if (routeMapper.finishLastMile(order.getId(), order.getCurrentSeq(),
+                RouteStatus.REFUSED, "收件人拒收") == 0)
+        {
+            throw new ApiException(409, "拒收失败，路段状态已变化");
+        }
         return createReturnOrder(order);
+    }
+
+    @Override
+    @Transactional
+    public void cancel(String orderNo, String senderPhone)
+    {
+        if (isBlank(senderPhone))
+        {
+            throw new ApiException(400, "寄件人手机号不能为空");
+        }
+
+        DeliveryOrder order = requireOrder(orderNo);
+        if (!senderPhone.trim().equals(order.getSenderPhone()))
+        {
+            throw new ApiException(403, "手机号与寄件人不一致");
+        }
+        if (order.getState() == OrderState.CANCELLED)
+        {
+            throw new ApiException(409, "订单已取消，无需重复操作");
+        }
+        // 状态机保证：首次发运后进入 SENDING，之后不再允许取消。
+        // APPROVED 在本项目里表示"始发站已收件核价、等待首次发运"。
+        if (order.getState() != OrderState.WAITING
+                && order.getState() != OrderState.AWAITING_RECEIPT
+                && order.getState() != OrderState.APPROVED)
+        {
+            throw new ApiException(409, "当前状态不可取消：" + order.getState() + "（只有首次发运前可取消）");
+        }
+
+        int rows = orderMapper.cancel(orderNo.trim(), senderPhone.trim(), LocalDateTime.now());
+        if (rows == 0)
+        {
+            throw new ApiException(409, "取消失败，订单可能已发运或状态已变化");
+        }
     }
 
     @Override
@@ -519,7 +568,8 @@ public class OrderServiceImpl implements OrderService
         {
             station = stationMapper.findById(stationId);
         }
-        return station == null ? null : new StationView(station.getId(), station.getCode(), station.getName());
+        return station == null ? null
+                : new StationView(station.getId(), station.getCode(), station.getName(), station.getAddress());
     }
 
     private boolean isBlank(String value)

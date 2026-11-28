@@ -1,5 +1,6 @@
 package norym.logisticsdeliverysystem.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -22,6 +23,10 @@ public class StationInboxItem
     private String goodsDesc;
     private String receiverName;
     private String receiverPhone;
+    private BigDecimal weight;
+    private BigDecimal volumeCm3;
+    private Boolean priceConfirmed;
+    private String remark;
     private LocalDateTime createTime;
 
     public String getBucket()
@@ -142,6 +147,46 @@ public class StationInboxItem
     public void setReceiverPhone(String receiverPhone)
     {
         this.receiverPhone = receiverPhone;
+    }
+
+    public BigDecimal getWeight()
+    {
+        return weight;
+    }
+
+    public void setWeight(BigDecimal weight)
+    {
+        this.weight = weight;
+    }
+
+    public BigDecimal getVolumeCm3()
+    {
+        return volumeCm3;
+    }
+
+    public void setVolumeCm3(BigDecimal volumeCm3)
+    {
+        this.volumeCm3 = volumeCm3;
+    }
+
+    public Boolean getPriceConfirmed()
+    {
+        return priceConfirmed;
+    }
+
+    public void setPriceConfirmed(Boolean priceConfirmed)
+    {
+        this.priceConfirmed = priceConfirmed;
+    }
+
+    public String getRemark()
+    {
+        return remark;
+    }
+
+    public void setRemark(String remark)
+    {
+        this.remark = remark;
     }
 
     public LocalDateTime getCreateTime()

@@ -120,6 +120,10 @@ function open(order: OrderDetail) {
               <span>当前所在</span>
               <b>{{ detail.currentStation?.name ?? '—' }}</b>
             </div>
+            <div v-if="detail.estimatedDays">
+              <span>预计时效</span>
+              <b>{{ detail.estimatedDays }} 天<template v-if="detail.estimatedDeliveryAt"> · {{ formatTime(detail.estimatedDeliveryAt) }}</template></b>
+            </div>
             <div>
               <span>货物</span>
               <b>{{ detail.goodsDesc ?? '—' }} · {{ detail.weight ?? '—' }} kg<template v-if="detail.volumeCm3 != null"> · {{ detail.volumeCm3 }} cm³</template></b>

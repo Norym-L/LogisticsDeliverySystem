@@ -96,7 +96,9 @@
                o.actual_volume_cm3        AS actualVolumeCm3,
                o.quoted_price             AS quotedPrice,
                o.price                    AS price,
-               (o.price_confirmed_at IS NOT NULL) AS priceConfirmed
+               (o.price_confirmed_at IS NOT NULL) AS priceConfirmed,
+               'DELIVERY'                 AS taskType,
+               r.remark                   AS remark
         FROM order_route r
                  JOIN delivery_order o ON o.id = r.order_id
                  LEFT JOIN order_route prev ON prev.order_id = r.order_id AND prev.seq = r.seq - 1
@@ -108,5 +110,125 @@
         <foreach collection="orderStates" item="s" open="(" separator="," close=")">#{s}</foreach>
         ORDER BY r.id DESC
     </select>
+
+    <!-- 按单号定位最后一公里任务：只能查到派给本人的单 -->
+    <select id="findTaskForPostman" resultType="norym.logisticsdeliverysystem.dto.PostmanTask">
+        SELECT o.order_no                 AS orderNo,
+               o.state                    AS orderState,
+               r.seq                      AS seq,
+               o.forward_station_count    AS forwardStationCount,
+               dest.name                  AS fromStationName,
+               CONCAT('收件人 ', o.receiver_name) AS toStationName,
+               r.arrive_trip_no           AS tripNo,
+               r.depart_time              AS departTime,
+               r.actual_arrive_time       AS arriveTime,
+               r.status                   AS legStatus,
+               o.sender_name              AS senderName,
+               o.receiver_name            AS receiverName,
+               o.receiver_phone           AS receiverPhone,
+               o.goods_desc               AS goodsDesc,
+               o.weight                   AS weight,
+               o.volume_cm3               AS volumeCm3,
+               o.actual_weight            AS actualWeight,
+               o.actual_volume_cm3        AS actualVolumeCm3,
+               o.quoted_price             AS quotedPrice,
+               o.price                    AS price,
+               (o.price_confirmed_at IS NOT NULL) AS priceConfirmed,
+               'DELIVERY'                 AS taskType,
+               r.remark                   AS remark
+        FROM order_route r
+                 JOIN delivery_order o ON o.id = r.order_id
+                 JOIN station dest ON dest.id = r.station_id
+        WHERE o.order_no = #{orderNo}
+          AND r.postman_id = #{postmanId}
+          AND r.seq = o.forward_station_count
+        LIMIT 1
+    </select>
+
+    <!-- 始发站待收件任务：批准后、确认收件前，本站快递员也能看到并操作 -->
+    <select id="findOriginReceiptTasks" resultType="norym.logisticsdeliverysystem.dto.PostmanTask">
+        SELECT o.order_no                 AS orderNo,
+               o.state                    AS orderState,
+               1                          AS seq,
+               o.forward_station_count    AS forwardStationCount,
+               fs.name                    AS fromStationName,
+               ts.name                    AS toStationName,
+               NULL                       AS tripNo,
+               NULL                       AS departTime,
+               NULL                       AS arriveTime,
+               'PENDING'                  AS legStatus,
+               o.sender_name              AS senderName,
+               o.receiver_name            AS receiverName,
+               o.receiver_phone           AS receiverPhone,
+               o.goods_desc               AS goodsDesc,
+               o.weight                   AS weight,
+               o.volume_cm3               AS volumeCm3,
+               o.actual_weight            AS actualWeight,
+               o.actual_volume_cm3        AS actualVolumeCm3,
+               o.quoted_price             AS quotedPrice,
+               o.price                    AS price,
+               (o.price_confirmed_at IS NOT NULL) AS priceConfirmed,
+               'RECEIVE'                  AS taskType,
+               NULL                       AS remark
+        FROM delivery_order o
+                 JOIN station fs ON fs.id = o.from_station_id
+                 JOIN station ts ON ts.id = o.to_station_id
+        WHERE o.state = 'AWAITING_RECEIPT'
+          AND o.from_station_id = #{stationId}
+        ORDER BY o.create_time
+    </select>
+
+    <select id="findOriginReceiptTask" resultType="norym.logisticsdeliverysystem.dto.PostmanTask">
+        SELECT o.order_no                 AS orderNo,
+               o.state                    AS orderState,
+               1                          AS seq,
+               o.forward_station_count    AS forwardStationCount,
+               fs.name                    AS fromStationName,
+               ts.name                    AS toStationName,
+               NULL                       AS tripNo,
+               NULL                       AS departTime,
+               NULL                       AS arriveTime,
+               'PENDING'                  AS legStatus,
+               o.sender_name              AS senderName,
+               o.receiver_name            AS receiverName,
+               o.receiver_phone           AS receiverPhone,
+               o.goods_desc               AS goodsDesc,
+               o.weight                   AS weight,
+               o.volume_cm3               AS volumeCm3,
+               o.actual_weight            AS actualWeight,
+               o.actual_volume_cm3        AS actualVolumeCm3,
+               o.quoted_price             AS quotedPrice,
+               o.price                    AS price,
+               (o.price_confirmed_at IS NOT NULL) AS priceConfirmed,
+               'RECEIVE'                  AS taskType,
+               NULL                       AS remark
+        FROM delivery_order o
+                 JOIN station fs ON fs.id = o.from_station_id
+                 JOIN station ts ON ts.id = o.to_station_id
+        WHERE o.order_no = #{orderNo}
+          AND o.state = 'AWAITING_RECEIPT'
+          AND o.from_station_id = #{stationId}
+        LIMIT 1
+    </select>
+
+    <update id="finishLastMile">
+        UPDATE order_route
+        SET status = #{status},
+            remark = #{remark}
+        WHERE order_id = #{orderId}
+          AND seq = #{seq}
+          AND status = 'DELIVERING'
+    </update>
+
+    <update id="resetLastMile">
+        UPDATE order_route
+        SET status      = 'ARRIVED',
+            depart_time = NULL,
+            postman_id  = NULL,
+            remark      = #{remark}
+        WHERE order_id = #{orderId}
+          AND seq = #{seq}
+          AND status = 'DELIVERING'
+    </update>
 
 </mapper>

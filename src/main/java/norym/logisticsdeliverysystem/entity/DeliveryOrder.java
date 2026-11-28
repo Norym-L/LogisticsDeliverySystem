@@ -31,6 +31,8 @@ public class DeliveryOrder
     private BigDecimal price;
     private LocalDateTime priceConfirmedAt;
     private Long priceConfirmedBy;
+    private Long priceConfirmedOperator;
+    private LocalDateTime receiptConfirmedAt;
 
     private OrderState state;
     private Integer currentSeq;
@@ -44,6 +46,7 @@ public class DeliveryOrder
     private String refuseReason;
     private LocalDateTime refuseTime;
     private LocalDateTime receiveTime;
+    private LocalDateTime cancelTime;
 
     private Integer forwardStationCount;
     private Integer resubmitCount;
@@ -225,6 +228,26 @@ public class DeliveryOrder
         this.priceConfirmedBy = priceConfirmedBy;
     }
 
+    public Long getPriceConfirmedOperator()
+    {
+        return priceConfirmedOperator;
+    }
+
+    public void setPriceConfirmedOperator(Long priceConfirmedOperator)
+    {
+        this.priceConfirmedOperator = priceConfirmedOperator;
+    }
+
+    public LocalDateTime getReceiptConfirmedAt()
+    {
+        return receiptConfirmedAt;
+    }
+
+    public void setReceiptConfirmedAt(LocalDateTime receiptConfirmedAt)
+    {
+        this.receiptConfirmedAt = receiptConfirmedAt;
+    }
+
     public boolean isPriceConfirmed()
     {
         return priceConfirmedAt != null;
@@ -328,6 +351,16 @@ public class DeliveryOrder
     public void setReceiveTime(LocalDateTime receiveTime)
     {
         this.receiveTime = receiveTime;
+    }
+
+    public LocalDateTime getCancelTime()
+    {
+        return cancelTime;
+    }
+
+    public void setCancelTime(LocalDateTime cancelTime)
+    {
+        this.cancelTime = cancelTime;
     }
 
     public Integer getForwardStationCount()

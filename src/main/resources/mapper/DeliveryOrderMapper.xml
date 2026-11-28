@@ -47,6 +47,25 @@
           AND state = 'DELIVERING'
     </update>
 
+    <!-- 快递员妥投：与用户签收共用 DELIVERING 条件，谁先成功谁生效 -->
+    <update id="deliverSuccess">
+        UPDATE delivery_order
+        SET state        = 'RECEIVED',
+            receive_time = #{now},
+            version      = version + 1
+        WHERE order_no = #{orderNo}
+          AND state = 'DELIVERING'
+    </update>
+
+    <!-- 派送失败：回到 SENDING，路段交给 service 重置为待再派 -->
+    <update id="deliveryFailed">
+        UPDATE delivery_order
+        SET state   = 'SENDING',
+            version = version + 1
+        WHERE order_no = #{orderNo}
+          AND state = 'DELIVERING'
+    </update>
+
     <!-- 拒收：原单终结为 REFUSED，退回单由 service 在同一事务里新建 -->
     <update id="refuse">
         UPDATE delivery_order
@@ -57,6 +76,25 @@
         WHERE order_no = #{orderNo}
           AND receiver_phone = #{receiverPhone}
           AND state = 'DELIVERING'
+    </update>
+
+    <!--
+      取消：寄件人手机号 + 状态 + "首次发运前" 三重条件。
+      NOT EXISTS 是最后一道保险：即使状态被人为改成 APPROVED，
+      只要路线里已经有出发时间，就不允许取消。
+    -->
+    <update id="cancel">
+        UPDATE delivery_order o
+        SET state       = 'CANCELLED',
+            cancel_time = #{now},
+            version     = version + 1
+        WHERE o.order_no = #{orderNo}
+          AND o.sender_phone = #{senderPhone}
+          AND o.state IN ('WAITING', 'AWAITING_RECEIPT', 'APPROVED')
+          AND NOT EXISTS (SELECT 1
+                          FROM order_route r
+                          WHERE r.order_id = o.id
+                            AND r.depart_time IS NOT NULL)
     </update>
 
     <!--
@@ -80,10 +118,13 @@
             price              = NULL,
             price_confirmed_at = NULL,
             price_confirmed_by = NULL,
+            price_confirmed_operator = NULL,
+            receipt_confirmed_at = NULL,
             state              = 'WAITING',
             reject_reason      = NULL,
             current_seq        = NULL,
             current_station_id = NULL,
+            cancel_time        = NULL,
             approve_deadline   = #{deadline},
             resubmit_count     = resubmit_count + 1,
             version            = version + 1
@@ -114,8 +155,39 @@
         o.goods_desc            AS goodsDesc,
         o.receiver_name         AS receiverName,
         o.receiver_phone        AS receiverPhone,
+        o.weight                AS weight,
+        o.volume_cm3            AS volumeCm3,
+        (o.price_confirmed_at IS NOT NULL) AS priceConfirmed,
+        cr.remark               AS remark,
         o.create_time           AS createTime
     </sql>
+
+    <!-- 待收件：路径管理员已批准，等待始发站确认收件并核价 -->
+    <select id="findPendingReceipt" resultType="norym.logisticsdeliverysystem.dto.StationInboxItem">
+        SELECT 'RECEIVE' AS bucket,
+               o.order_no              AS orderNo,
+               o.state                 AS state,
+               fs.name                 AS fromStation,
+               ts.name                 AS toStation,
+               NULL                    AS nextStation,
+               o.current_seq           AS currentSeq,
+               o.forward_station_count AS forwardStationCount,
+               NULL                    AS tripNo,
+               o.goods_desc            AS goodsDesc,
+               o.receiver_name         AS receiverName,
+               o.receiver_phone        AS receiverPhone,
+               o.weight                AS weight,
+               o.volume_cm3            AS volumeCm3,
+               (o.price_confirmed_at IS NOT NULL) AS priceConfirmed,
+               NULL                    AS remark,
+               o.create_time           AS createTime
+        FROM delivery_order o
+                 JOIN station fs ON fs.id = o.from_station_id
+                 JOIN station ts ON ts.id = o.to_station_id
+        WHERE o.state = 'AWAITING_RECEIPT'
+          AND o.from_station_id = #{stationId}
+        ORDER BY o.create_time
+    </select>
 
     <!-- 待发运：货在本站，下一段还没到，本站尚未发车 -->
     <select id="findPendingDepart" resultType="norym.logisticsdeliverysystem.dto.StationInboxItem">
@@ -164,6 +236,10 @@
                o.goods_desc            AS goodsDesc,
                o.receiver_name         AS receiverName,
                o.receiver_phone        AS receiverPhone,
+               o.weight                AS weight,
+               o.volume_cm3            AS volumeCm3,
+               (o.price_confirmed_at IS NOT NULL) AS priceConfirmed,
+               dest.remark             AS remark,
                o.create_time           AS createTime
         FROM delivery_order o
                  JOIN order_route dest ON dest.order_id = o.id AND dest.seq = o.forward_station_count
@@ -185,10 +261,11 @@
         ORDER BY create_time DESC
     </select>
 
-    <!-- 批准：state='WAITING' 是并发闸门，与超时任务抢同一单时只有一方生效 -->
+    <!-- 批准：state='WAITING' 是并发闸门，与超时任务抢同一单时只有一方生效。
+         批准后先进入待始发站收件，确认收件并核价后才转 APPROVED。 -->
     <update id="approve">
         UPDATE delivery_order
-        SET state              = 'APPROVED',
+        SET state              = 'AWAITING_RECEIPT',
             approve_by         = #{operatorId},
             approve_time       = #{now},
             forward_station_count = #{stationCount},
@@ -206,6 +283,22 @@
             version       = version + 1
         WHERE order_no = #{orderNo}
           AND state = 'WAITING'
+    </update>
+
+    <!-- 始发站确认收件并核价：状态闸门 + 实测数据 + 最终价一次写入 -->
+    <update id="confirmReceipt">
+        UPDATE delivery_order
+        SET state                    = 'APPROVED',
+            receipt_confirmed_at     = #{now},
+            actual_volume_cm3        = #{volumeCm3},
+            actual_weight            = #{weightKg},
+            price                    = #{price},
+            price_confirmed_at       = #{now},
+            price_confirmed_by       = #{postmanId},
+            price_confirmed_operator = #{operatorId},
+            version                  = version + 1
+        WHERE order_no = #{orderNo}
+          AND state = 'AWAITING_RECEIPT'
     </update>
 
     <!-- 推进：prevSeq 是乐观条件，两个邮递员同时扫码时只有一个能推进 -->

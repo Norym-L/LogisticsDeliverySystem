@@ -63,8 +63,9 @@ public class PricingServiceImpl implements PricingService
             {
                 throw new ApiException(404, "订单不存在：" + request.orderNo());
             }
+            List<Long> path = pathForOrder(order);
             PriceQuoteView quote = calculator.calculate(
-                    request.weightKg(), request.volumeCm3(), distanceForOrder(order));
+                    request.weightKg(), request.volumeCm3(), planner.distanceOf(path));
             return new PriceQuoteView(
                     quote.weightKg(),
                     quote.volumeCm3(),
@@ -75,6 +76,7 @@ public class PricingServiceImpl implements PricingService
                     quote.additionalKgPrice(),
                     quote.additionalWeightKg(),
                     quote.freight(),
+                    estimateDays(path),
                     order.getOrderNo(),
                     null,
                     null);
@@ -88,8 +90,9 @@ public class PricingServiceImpl implements PricingService
                                         BigDecimal weightKg, BigDecimal volumeCm3)
     {
         validateMeasures(weightKg, volumeCm3);
-        BigDecimal distance = planner.distanceOf(planner.shortestPath(fromStationId, toStationId));
-        return calculator.calculate(weightKg, volumeCm3, distance);
+        List<Long> path = planner.shortestPath(fromStationId, toStationId);
+        PriceQuoteView quote = calculator.calculate(weightKg, volumeCm3, planner.distanceOf(path));
+        return quote.withEstimatedDays(estimateDays(path));
     }
 
     @Override
@@ -102,6 +105,24 @@ public class PricingServiceImpl implements PricingService
     @Override
     public BigDecimal distanceForOrder(DeliveryOrder order)
     {
+        return planner.distanceOf(pathForOrder(order));
+    }
+
+    @Override
+    public int estimateDaysForOrder(DeliveryOrder order)
+    {
+        return estimateDays(pathForOrder(order));
+    }
+
+    @Override
+    public int estimateDaysForStations(Long fromStationId, Long toStationId)
+    {
+        return estimateDays(planner.shortestPath(fromStationId, toStationId));
+    }
+
+    /** 有固化路线时用路线，否则用最短路；空路线按 1 站处理 */
+    private List<Long> pathForOrder(DeliveryOrder order)
+    {
         if (order == null)
         {
             throw new ApiException(400, "订单不能为空");
@@ -109,13 +130,19 @@ public class PricingServiceImpl implements PricingService
         List<OrderRoute> legs = routeMapper.findByOrderId(order.getId());
         if (legs != null && legs.size() >= 2)
         {
-            List<Long> path = legs.stream()
+            return legs.stream()
                     .sorted(Comparator.comparing(OrderRoute::getSeq))
                     .map(OrderRoute::getStationId)
                     .toList();
-            return planner.distanceOf(path);
         }
-        return planner.distanceOf(planner.shortestPath(order.getFromStationId(), order.getToStationId()));
+        return planner.shortestPath(order.getFromStationId(), order.getToStationId());
+    }
+
+    /** 每跨一站记 1 日，最少 1 日；规则简单、可复现，不接外部路由预测 */
+    private int estimateDays(List<Long> path)
+    {
+        int hops = path == null ? 0 : path.size() - 1;
+        return Math.max(1, hops);
     }
 
     @Override

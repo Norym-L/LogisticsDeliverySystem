@@ -29,9 +29,24 @@ public interface DeliveryOrderMapper
              @Param("receiverPhone") String receiverPhone,
              @Param("now") LocalDateTime now);
 
+    /** 快递员妥投：条件仍是 DELIVERING，防止与用户端签收并发重复完成。 */
+    int deliverSuccess(@Param("orderNo") String orderNo,
+                       @Param("now") LocalDateTime now);
+
+    /** 派送失败：DELIVERING 回 SENDING，路段由 service 重置为待再派。 */
+    int deliveryFailed(@Param("orderNo") String orderNo);
+
     int refuse(@Param("orderNo") String orderNo,
                @Param("receiverPhone") String receiverPhone,
                @Param("reason") String reason,
+               @Param("now") LocalDateTime now);
+
+    /**
+     * 用户取消：只允许首次发运前（WAITING / AWAITING_RECEIPT / APPROVED），
+     * 同时用寄件人手机号做身份校验。
+     */
+    int cancel(@Param("orderNo") String orderNo,
+               @Param("senderPhone") String senderPhone,
                @Param("now") LocalDateTime now);
 
     /**
@@ -50,6 +65,9 @@ public interface DeliveryOrderMapper
     /** 本站待发运：当前站是本站，下一段尚未到达，本站还没写出发车时间 */
     List<norym.logisticsdeliverysystem.dto.StationInboxItem> findPendingDepart(@Param("stationId") Long stationId);
 
+    /** 本站待收件：批准后、始发站确认收件前 */
+    List<norym.logisticsdeliverysystem.dto.StationInboxItem> findPendingReceipt(@Param("stationId") Long stationId);
+
     /** 本站待到货：下一段的站是本站，且上一段已经发运 */
     List<norym.logisticsdeliverysystem.dto.StationInboxItem> findPendingArrive(@Param("stationId") Long stationId);
 
@@ -62,6 +80,18 @@ public interface DeliveryOrderMapper
                 @Param("now") LocalDateTime now,
                 @Param("stationCount") int stationCount,
                 @Param("fromStationId") Long fromStationId);
+
+    /**
+     * 始发站确认收件并核价：只认 AWAITING_RECEIPT，
+     * 同一事务里写入实测体积/质量、最终运费和收件时间，随后转 APPROVED。
+     */
+    int confirmReceipt(@Param("orderNo") String orderNo,
+                       @Param("now") LocalDateTime now,
+                       @Param("volumeCm3") java.math.BigDecimal volumeCm3,
+                       @Param("weightKg") java.math.BigDecimal weightKg,
+                       @Param("price") java.math.BigDecimal price,
+                       @Param("postmanId") Long postmanId,
+                       @Param("operatorId") Long operatorId);
 
     int reject(@Param("orderNo") String orderNo, @Param("reason") String reason);
 

@@ -23,21 +23,24 @@ const profiles = {
     role: '节点管理员',
     auth: true,
     login: 'station-login',
-    nav: [{ name: 'station-inbox', label: '本站待办', hint: '车次、到货、派单' }]
+    nav: [{ name: 'station-inbox', label: '本站待办', hint: '收件、车次、到货、派单' }]
   },
   courier: {
     sub: '快递员工作台',
     role: '快递员',
     auth: true,
     login: 'courier-login',
-    nav: [{ name: 'courier-tasks', label: '我的任务', hint: '核价、取件与派送' }]
+    nav: [{ name: 'courier-tasks', label: '我的任务', hint: '收件核价、取件与妥投' }]
   },
   user: {
     sub: '寄件查询',
     role: '用户',
     auth: false,
     login: 'login',
-    nav: [{ name: 'user-home', label: '寄件', hint: '下单与按手机号查询' }]
+    nav: [
+      { name: 'user-home', label: '寄件', hint: '下单与查件' },
+      { name: 'stations', label: '网点', hint: '站名与地址' }
+    ]
   }
 } as const
 

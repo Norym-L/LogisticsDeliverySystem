@@ -5,9 +5,10 @@ import java.time.LocalDateTime;
 /**
  * 订单路线，对应 order_route 表。
  * <p>
- * seq 从 1 开始：去程 1..n（1 是始发站，n 是目的站），
- * 拒收后的回程接在 n+1..2n-1，站点逆序，最后一行回到始发站。
- * 因此"取下一节点"永远是 seq = current_seq + 1，去程回程共用一套逻辑。
+ * seq 从 1 开始：1 是始发站，n 是目的站。批准后整条路线固化，
+ * 但始发站那一段要等始发站确认收件后才置为 ARRIVED。
+ * 拒收不追加回程行，而是生成一张方向相反的独立退回单；
+ * 本单 current_seq 单调递增，"取下一节点"永远是 seq = current_seq + 1。
  */
 public class OrderRoute
 {

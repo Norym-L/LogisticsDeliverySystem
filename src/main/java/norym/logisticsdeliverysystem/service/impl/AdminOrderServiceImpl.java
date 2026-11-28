@@ -104,16 +104,15 @@ public class AdminOrderServiceImpl implements AdminOrderService
 
         // 先清后写：重复批准时不会留下两份路线
         routeMapper.deleteByOrderId(order.getId());
-        LocalDateTime now = LocalDateTime.now();
         for (int i = 0; i < path.size(); i++)
         {
             OrderRoute route = new OrderRoute();
             route.setOrderId(order.getId());
             route.setSeq(i + 1);
             route.setStationId(path.get(i));
-            // 始发站视为已到站：货本来就在站里，界面不该显示"未到达"
-            route.setStatus(i == 0 ? RouteStatus.ARRIVED : RouteStatus.PENDING);
-            route.setActualArriveTime(i == 0 ? now : null);
+            // 批准后货还没到始发站：等始发站确认收件时再把 seq=1 置为 ARRIVED
+            route.setStatus(RouteStatus.PENDING);
+            route.setActualArriveTime(null);
             routeMapper.insert(route);
         }
     }
@@ -224,6 +223,11 @@ public class AdminOrderServiceImpl implements AdminOrderService
         {
             throw new ApiException(409, "当前状态不可发运：" + order.getState());
         }
+        // 最终运费必须在始发站收件时确认；未核价不得运出
+        if (!order.isPriceConfirmed())
+        {
+            throw new ApiException(409, "请先在始发站确认收件并核价，再发运");
+        }
         requireCurrentStation(order, operatorStationId, "只能从本站发运");
 
         int nextSeq = nextSeq(order);
@@ -311,6 +315,7 @@ public class AdminOrderServiceImpl implements AdminOrderService
             throw new ApiException(403, "当前账号未绑定驿站");
         }
         List<StationInboxItem> items = new ArrayList<>();
+        items.addAll(orderMapper.findPendingReceipt(stationId));
         items.addAll(orderMapper.findPendingDepart(stationId));
         items.addAll(orderMapper.findPendingArrive(stationId));
         items.addAll(orderMapper.findPendingDispatch(stationId));

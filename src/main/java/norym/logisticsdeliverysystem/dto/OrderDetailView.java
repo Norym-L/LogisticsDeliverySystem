@@ -17,6 +17,10 @@ public record OrderDetailView(
         StationView fromStation,
         StationView toStation,
         StationView currentStation,
+        /** 简易预计时效：路线每跨一站 1 日，最少 1 日；批准改路线后会变化 */
+        Integer estimatedDays,
+        /** 预计送达时间 = 下单时间 + estimatedDays 天（简化规则，不接外部预测） */
+        LocalDateTime estimatedDeliveryAt,
         String goodsDesc,
         BigDecimal weight,
         BigDecimal volumeCm3,
@@ -35,14 +39,16 @@ public record OrderDetailView(
         String originalOrderNo)
 {
     /**
-     * 订单级事件时间：下单、批准、签收、拒收。
+     * 订单级事件时间：下单、批准、始发站收件、签收、拒收、取消。
      * 每个站点的到站时间在 trajectory 里。
      */
     public record Events(
             LocalDateTime createdAt,
             LocalDateTime approvedAt,
+            LocalDateTime originReceivedAt,
             LocalDateTime receivedAt,
-            LocalDateTime refusedAt)
+            LocalDateTime refusedAt,
+            LocalDateTime cancelledAt)
     {
     }
 }

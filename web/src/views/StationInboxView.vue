@@ -13,12 +13,14 @@ const error = ref('')
 const message = ref('')
 const trips = reactive<Record<string, string>>({})
 const couriers = reactive<Record<string, number | ''>>({})
+const measures = reactive<Record<string, { volume: number | ''; weight: number | '' }>>({})
 const selectedKey = ref('')
 
+const receipts = computed(() => items.value.filter((item) => item.bucket === 'RECEIVE'))
 const departures = computed(() => items.value.filter((item) => item.bucket === 'DEPART'))
 const arrivals = computed(() => items.value.filter((item) => item.bucket === 'ARRIVE'))
 const dispatches = computed(() => items.value.filter((item) => item.bucket === 'DISPATCH'))
-const queue = computed(() => [...departures.value, ...arrivals.value, ...dispatches.value])
+const queue = computed(() => [...receipts.value, ...departures.value, ...arrivals.value, ...dispatches.value])
 
 const selected = computed(() => queue.value.find((item) => keyOf(item) === selectedKey.value) ?? null)
 
@@ -27,9 +29,20 @@ function keyOf(item: StationInboxItem) {
 }
 
 function bucketLabel(bucket: StationInboxItem['bucket']) {
+  if (bucket === 'RECEIVE') return '待收件'
   if (bucket === 'DEPART') return '待发运'
   if (bucket === 'ARRIVE') return '待到货'
   return '待派单'
+}
+
+function measureOf(item: StationInboxItem) {
+  if (!measures[item.orderNo]) {
+    measures[item.orderNo] = {
+      volume: item.volumeCm3 ?? '',
+      weight: item.weight ?? ''
+    }
+  }
+  return measures[item.orderNo]
 }
 
 function open(item: StationInboxItem) {
@@ -84,6 +97,20 @@ function registerTrip(item: StationInboxItem) {
   }), `${item.orderNo} 已登记车次`)
 }
 
+function receive(item: StationInboxItem) {
+  const measure = measureOf(item)
+  const volume = Number(measure.volume)
+  const weight = Number(measure.weight)
+  if (!(volume > 0) || !(weight > 0)) {
+    error.value = '确认收件前请录入体积和质量'
+    return
+  }
+  return run(item.orderNo, () => http.post(`/admin/orders/${item.orderNo}/receive`, {
+    volumeCm3: volume,
+    weightKg: weight
+  }), `${item.orderNo} 已确认收件并完成核价`)
+}
+
 function depart(item: StationInboxItem) {
   return run(item.orderNo, () => http.post(`/admin/orders/${item.orderNo}/depart`), `${item.orderNo} 已发运`)
 }
@@ -106,10 +133,10 @@ onMounted(load)
     <header class="page-head">
       <div>
         <h1>本站待办</h1>
-        <p>本站要处理的单：登记车次后发运，下一站确认到货，目的站派给快递员。</p>
+        <p>本站要处理的单：确认收件并核价、登记车次后发运，下一站确认到货，目的站派给快递员。</p>
       </div>
       <div class="head-actions">
-        <span class="pane-count">发运 {{ departures.length }} · 到货 {{ arrivals.length }} · 派单 {{ dispatches.length }}</span>
+        <span class="pane-count">收件 {{ receipts.length }} · 发运 {{ departures.length }} · 到货 {{ arrivals.length }} · 派单 {{ dispatches.length }}</span>
         <button class="ghost small" type="button" :disabled="loading" @click="load">
           {{ loading ? '刷新中…' : '刷新' }}
         </button>
@@ -126,7 +153,7 @@ onMounted(load)
         </div>
 
         <div v-else-if="queue.length === 0" class="pane-empty">
-          <EmptyState title="本站暂时没有待办" hint="路径管理员批准后，始发站会在这里看到待发运的订单。" />
+          <EmptyState title="本站暂时没有待办" hint="路径管理员批准后，始发站会先看到待收件的订单。" />
         </div>
 
         <div v-else class="list">
@@ -183,17 +210,56 @@ onMounted(load)
               <span>车次</span>
               <b>{{ selected.tripNo ?? '尚未登记' }}</b>
             </div>
+            <div v-if="selected.volumeCm3 != null || selected.weight != null">
+              <span>申报货物</span>
+              <b>{{ selected.weight ?? '—' }} kg · {{ selected.volumeCm3 ?? '—' }} cm³</b>
+            </div>
+            <div v-if="selected.remark">
+              <span>派送备注</span>
+              <b>{{ selected.remark }}</b>
+            </div>
           </div>
 
-          <div v-if="selected.bucket === 'DEPART'" class="detail-block">
+          <div v-if="selected.bucket === 'RECEIVE'" class="detail-block">
+            <h2>确认收件并核价</h2>
+            <p class="hint">货到始发站后先确认收件；核价使用实测体积和质量，按已固化路线计算，之后目的站不再改价。</p>
+            <div class="field">
+              <label :for="`recv-vol-${selected.orderNo}`">实测体积（立方厘米）</label>
+              <input
+                :id="`recv-vol-${selected.orderNo}`"
+                v-model="measureOf(selected).volume"
+                type="number"
+                min="0"
+                step="1"
+              />
+            </div>
+            <div class="field">
+              <label :for="`recv-wt-${selected.orderNo}`">实测质量（kg）</label>
+              <input
+                :id="`recv-wt-${selected.orderNo}`"
+                v-model="measureOf(selected).weight"
+                type="number"
+                min="0"
+                step="0.01"
+              />
+            </div>
+            <div class="compose-actions">
+              <button class="small" type="button" :disabled="busyNo !== ''" @click="receive(selected)">
+                确认收件并核价
+              </button>
+            </div>
+          </div>
+
+          <div v-else-if="selected.bucket === 'DEPART'" class="detail-block">
             <h2>发运</h2>
+            <p v-if="!selected.priceConfirmed" class="hint">运费尚未确认，不能发运。</p>
             <div class="field">
               <label :for="`trip-${selected.orderNo}`">车次</label>
               <input :id="`trip-${selected.orderNo}`" v-model="trips[selected.orderNo]" maxlength="32" placeholder="例如 T001" />
             </div>
             <div class="compose-actions">
               <button class="small" type="button" :disabled="busyNo !== ''" @click="registerTrip(selected)">登记车次</button>
-              <button class="small" type="button" :disabled="busyNo !== '' || !selected.tripNo" @click="depart(selected)">发运</button>
+              <button class="small" type="button" :disabled="busyNo !== '' || !selected.tripNo || !selected.priceConfirmed" @click="depart(selected)">发运</button>
             </div>
             <p v-if="!selected.tripNo" class="hint">发运前需要先登记下一段车次。</p>
           </div>

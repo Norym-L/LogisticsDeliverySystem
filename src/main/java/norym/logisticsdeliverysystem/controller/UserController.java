@@ -90,6 +90,15 @@ public class UserController
         return ApiResult.ok();
     }
 
+    /** 寄件人取消：仅首次发运前可取消 */
+    @PostMapping("/{orderNo}/cancel")
+    public ApiResult<Void> cancel(@PathVariable("orderNo") String orderNo,
+                                  @RequestBody(required = false) norym.logisticsdeliverysystem.dto.CancelOrderRequest request)
+    {
+        orderService.cancel(orderNo, request == null ? null : request.senderPhone());
+        return ApiResult.ok();
+    }
+
     /** 二维码内容：服务器只出字符串，图片由前端画 */
     @GetMapping("/{orderNo}/qrcode")
     public ApiResult<norym.logisticsdeliverysystem.dto.QrCodeView> qrCode(@PathVariable("orderNo") String orderNo)

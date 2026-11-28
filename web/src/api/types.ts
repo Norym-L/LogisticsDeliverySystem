@@ -16,6 +16,7 @@ export interface StationView {
   id: number
   code: string
   name: string
+  address?: string | null
 }
 
 export interface OrderBrief {
@@ -55,6 +56,7 @@ export interface PriceQuote {
   additionalKgPrice: number
   additionalWeightKg: number
   freight: number
+  estimatedDays?: number | null
   orderNo?: string | null
   priceConfirmed?: boolean | null
   priceConfirmedAt?: string | null
@@ -91,6 +93,8 @@ export interface OrderDetail {
   fromStation: StationView | null
   toStation: StationView | null
   currentStation: StationView | null
+  estimatedDays?: number | null
+  estimatedDeliveryAt?: string | null
   goodsDesc: string | null
   weight: number | null
   volumeCm3?: number | null
@@ -104,8 +108,10 @@ export interface OrderDetail {
   events: {
     createdAt?: string | null
     approvedAt?: string | null
+    originReceivedAt?: string | null
     receivedAt?: string | null
     refusedAt?: string | null
+    cancelledAt?: string | null
   }
   rejectReason?: string | null
   refuseReason?: string | null
@@ -122,7 +128,7 @@ export interface OrderStatus {
 }
 
 export interface StationInboxItem {
-  bucket: 'DEPART' | 'ARRIVE' | 'DISPATCH'
+  bucket: 'RECEIVE' | 'DEPART' | 'ARRIVE' | 'DISPATCH'
   orderNo: string
   state: string
   fromStation: string
@@ -134,6 +140,10 @@ export interface StationInboxItem {
   goodsDesc: string | null
   receiverName: string
   receiverPhone: string
+  weight?: number | null
+  volumeCm3?: number | null
+  priceConfirmed?: boolean | null
+  remark?: string | null
   createTime: string
 }
 
@@ -160,16 +170,20 @@ export interface PostmanTask {
   quotedPrice?: number | null
   price?: number | null
   priceConfirmed?: boolean | null
+  taskType?: 'DELIVERY' | 'RECEIVE' | null
+  remark?: string | null
 }
 
 export const STATE_LABEL: Record<string, string> = {
   WAITING: '待审批',
-  APPROVED: '已批准',
+  AWAITING_RECEIPT: '待始发收件',
+  APPROVED: '待发运',
   REJECTED: '已拒绝',
   SENDING: '运送中',
   DELIVERING: '派送中',
   RECEIVED: '已签收',
-  REFUSED: '已拒收'
+  REFUSED: '已拒收',
+  CANCELLED: '已取消'
 }
 
 export function stateLabel(state: string): string {
@@ -177,7 +191,7 @@ export function stateLabel(state: string): string {
 }
 
 export function stateTone(state: string): string {
-  if (state === 'WAITING') return 'tone-wait'
+  if (state === 'WAITING' || state === 'AWAITING_RECEIPT' || state === 'CANCELLED') return 'tone-wait'
   if (state === 'REJECTED' || state === 'REFUSED') return 'tone-bad'
   if (state === 'RECEIVED') return 'tone-ok'
   return 'tone-run'
