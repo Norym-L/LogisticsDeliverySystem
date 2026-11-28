@@ -36,6 +36,10 @@ src/main/java/norym/logisticsdeliverysystem/
 src/main/resources/
   mapper/*.xml   SQL
   static/        前端构建产物（.gitignore，需自行构建）
+init.py          Python 3 一键初始化（检查环境、准备 MySQL、初始化/升级库、安装依赖、按需构建）
+init.cmd         Windows 双击初始化入口
+start.cmd        Windows 双击启动入口
+start.ps1        Windows PowerShell 一键启动（启动后端并打开浏览器）
 sql/
   schema.sql     建库建表、约束、索引
   seed.sql       8 个驿站、10 条线路、9 个操作员、16 名快递员
@@ -47,7 +51,74 @@ web/             前端工程（见 web/README.md，高德 Key 放在 web/.env.l
 
 ## 快速开始
 
-### 1. 数据库
+初始化只准备环境、数据库和前端，不启动后端；启动脚本负责拉起 Spring Boot 并打开浏览器。
+两步都会跳过已完成的步骤，可以安全地重复运行。
+
+### 第 1 步：一键初始化（Python 3.9+）
+
+在仓库根目录执行：
+
+```bash
+python init.py
+```
+
+macOS / Linux 若没有 `python` 命令，用 `python3 init.py`。Windows 也可以直接双击 `init.cmd`
+（内部优先 `py -3`，没有则回退 `python`）。`init.py` 只用 Python 标准库，不需要 pip 安装依赖。
+
+`init.py` 会依次：
+
+- 检查 Python 3.9+、JDK 21+、Node.js 18+ / npm。Windows 上缺少 JDK 或 Node.js 时，会尝试用
+  `winget` 非交互安装 Microsoft OpenJDK 21 / Eclipse Temurin 21 和 Node.js LTS；winget 失败或
+  非 Windows 时，打印人工安装步骤并停止。
+- 准备 MySQL 8（`127.0.0.1:3308`，库 `logistics`，root / 123456）。有 Docker 时，若 3308 未就绪
+  则创建或启动 `logistics-mysql` 容器（`3308:3306`，utf8mb4）；已有同名容器只启动，不删除重建。
+  没有 Docker 时，需要本机已有监听 3308 的 MySQL 8。
+- 检查数据库：只有 `logistics` 库不存在，或六张关键表一张都不存在时才执行 `sql/schema.sql` +
+  `sql/seed.sql`；关键表只存在一部分时不会自动重建，会停止并打印需要手动执行的脚本。
+  已有库只做结构检查，按需执行可重复的增量脚本（`sql/alter_pricing.sql`、`sql/alter_final_six.sql`、
+  `sql/alter_track_map.sql`，必要时 `sql/alter_track_map_gcj02.sql`），不会 DROP 已有业务表。
+- 在 `web/` 执行 `npm install`（依赖已存在时跳过）。`web/.env.local` 不存在时从 `web/.env.example`
+  复制，已有 `.env.local` 绝不覆盖。`src/main/resources/static/index.html` 不存在时执行
+  `npm run build`，已有产物不重复构建。
+- 最后打印 Java / Node.js / MySQL / 数据库 / 前端依赖 / 静态产物 / 高德 Key 的就绪摘要；
+  Key 只显示「已填写」或「尚未填写」，不显示内容。
+
+> `init.py` 不会启动 Spring Boot，也不会打开浏览器。重复运行会跳过已完成的步骤。
+> 只有显式执行 `python init.py --reset-db` 才会删除 `logistics` 的业务表并重新执行
+> `schema.sql` + `seed.sql`。该参数会清空现有业务数据，使用前务必备份。
+
+### 第 2 步：一键启动（Windows）
+
+双击 `start.cmd`，或在 PowerShell 中执行：
+
+```powershell
+.\start.ps1
+```
+
+需要额外启动 Vite 开发服务器（http://127.0.0.1:5173/）时用 `.\start.ps1 -Dev`。
+
+启动脚本会再次检查 Java / Node.js / MySQL，按需补齐数据库和前端（已完成的步骤直接跳过），
+然后在新窗口运行 `mvnw.cmd spring-boot:run`，等待 18080 就绪后打开 http://127.0.0.1:18080/。
+
+- **不会覆盖已有数据库**：数据库已存在时只做检查和可重复的增量升级，不执行 `schema.sql` 的 DROP；
+  只有 `init.py --reset-db` 会清空重建。
+- **不会覆盖已有 `.env.local`**：只在文件不存在时从 `.env.example` 复制，不会写入或修改高德 Key。
+- **不会把 Key 写入仓库**：高德 Key 只保存在被 `.gitignore` 忽略的 `web/.env.local` 中；
+  `src/main/resources/static/` 是构建产物，同样不会提交。
+- 未填写 `VITE_AMAP_JS_API_KEY` 时系统仍可启动，但轨迹地图会提示缺少 Key。填写后重新运行
+  `start.ps1` 即可：它会发现 `.env.local` 比构建产物新并自动重建；也可以手动执行
+  `cd web && npm run build`。
+- 已有前端构建产物时不会每次重建。需要强制重建时，删除 `src/main/resources/static/` 后重新运行
+  `init.py` / `start.ps1`，或在 `web/` 执行 `npm run build`。
+
+`init.cmd` / `start.cmd` 适用于 Windows（PowerShell 5.1 与 PowerShell 7）。`init.py` 本身也可在
+macOS / Linux 上运行，但 `start.cmd` / `start.ps1` 仅支持 Windows；非 Windows 请按下面的手动步骤启动。
+
+### 手动方式（不使用一键脚本）
+
+一键脚本本质上也是执行下面这些步骤；需要排查问题或在 macOS / Linux 上运行时可以手动操作。
+
+#### 数据库
 
 ```bash
 mysql -h127.0.0.1 -P3308 -uroot -p < sql/schema.sql
@@ -55,12 +126,13 @@ mysql -h127.0.0.1 -P3308 -uroot -p < sql/seed.sql
 mysql -h127.0.0.1 -P3308 -uroot -p < sql/test.sql   # 可选：应输出「44 条用例全部通过」
 ```
 
+`schema.sql` 会 DROP 并重建业务表，只适合首次初始化或确认数据可丢弃时执行。
 已有旧库不想重建时，按顺序执行 `sql/alter_pricing.sql`、`sql/alter_final_six.sql`、
 `sql/alter_track_map.sql` 增量升级。若该库此前已经执行过旧版 `alter_track_map.sql`
 （库内是 WGS84 坐标），再执行 `sql/alter_track_map_gcj02.sql` 原地转换为 GCJ-02；
 两个脚本都可以重复执行。
 
-### 2. 构建前端（必须）
+#### 构建前端
 
 高德地图 Key 不写入仓库。先在本机配置：
 
@@ -80,16 +152,17 @@ npm run build                  # 产物写入 src/main/resources/static
 > 需要现场改前端时用 `npm run dev`（http://127.0.0.1:5173，`/api` 走代理）。
 > 不要把构建产物提交进仓库，否则会把本地 Key 一起带进去。
 
-### 3. 启动后端
+#### 启动后端
 
 ```bash
 ./mvnw spring-boot:run -Dspring-boot.run.arguments=--server.port=18080
+# Windows 用 mvnw.cmd spring-boot:run -Dspring-boot.run.arguments=--server.port=18080
 ```
 
 默认端口 8080。若环境里存在 `SERVER_PORT`（部分 IDE / 工具链会注入），会覆盖默认值并可能撞端口，
 所以上面显式指定 18080。启动后访问 http://127.0.0.1:18080/ 。
 
-### 4. 打包
+#### 打包
 
 ```bash
 ./mvnw package -DskipTests     # 先执行过 npm run build，页面才会进 jar
