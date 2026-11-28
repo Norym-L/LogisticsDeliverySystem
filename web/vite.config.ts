@@ -17,7 +17,13 @@ export default defineConfig(({ mode }) =>
       'import.meta.env.VITE_AMAP_JS_API_KEY': JSON.stringify(amapJsApiKey)
     },
     resolve: {
-      alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) }
+      // 只匹配 "@/..."，避免把 "@fontsource/..." 等 scoped 包当成别名。
+      alias: [
+        {
+          find: /^@\//,
+          replacement: fileURLToPath(new URL('./src/', import.meta.url))
+        }
+      ]
     },
     server: {
       port: 5173,

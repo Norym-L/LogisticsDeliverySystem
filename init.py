@@ -1527,21 +1527,38 @@ def prepare_frontend():
 
     vite_unix = WEB_DIR / "node_modules" / ".bin" / "vite"
     vite_win = WEB_DIR / "node_modules" / ".bin" / "vite.cmd"
-    if vite_unix.exists() or vite_win.exists():
+    # 除 vite 启动器外，还要确认 tysha-fonts.css 依赖的自托管字体已安装，
+    # 否则旧的 node_modules 会跳过 npm install，构建时才在 @fontsource 上报错。
+    font_css_files = (
+        WEB_DIR / "node_modules" / "@fontsource" / "inter-tight" / "latin-300.css",
+        WEB_DIR / "node_modules" / "@fontsource" / "instrument-serif" / "latin-400.css",
+        WEB_DIR / "node_modules" / "@fontsource" / "geist-mono" / "latin-400.css",
+        WEB_DIR / "node_modules" / "@fontsource" / "noto-sans-sc" / "chinese-simplified-400.css",
+        WEB_DIR / "node_modules" / "@fontsource" / "noto-serif-sc" / "chinese-simplified-400.css",
+    )
+    has_vite = vite_unix.exists() or vite_win.exists()
+    missing_fonts = [path for path in font_css_files if not path.is_file()]
+    if has_vite and not missing_fonts:
         STATE.deps_status = "已安装（跳过 npm install）"
-        ok("前端依赖已存在，跳过 npm install。")
+        ok("前端依赖已存在（含 @fontsource 字体），跳过 npm install。")
     else:
-        info("未检测到完整前端依赖，执行 npm install（首次可能较慢）...")
+        info(
+            "未检测到完整前端依赖（vite 或 @fontsource 字体缺失），"
+            "执行 npm install（首次可能较慢）..."
+        )
         code = run_stream([STATE.npm_path, "install"], WEB_DIR, timeout=1200)
         if code != 0:
             fail(
                 "npm install 失败（退出码 {}）。".format(code),
                 "请检查网络与 npm 配置（代理/镜像），然后重新运行 init.py。",
             )
-        if not (vite_unix.exists() or vite_win.exists()):
+        has_vite = vite_unix.exists() or vite_win.exists()
+        missing_fonts = [path for path in font_css_files if not path.is_file()]
+        if not has_vite or missing_fonts:
             fail(
-                "npm install 完成后仍未找到 node_modules/.bin 下的 vite 启动器。",
-                "请检查 npm 安装日志和 web/package.json。",
+                "npm install 完成后仍缺少 vite 启动器或 @fontsource 字体文件。",
+                "请检查 npm 安装日志与镜像配置；"
+                "可删除 web/node_modules 后重新运行 init.py。",
             )
         STATE.deps_status = "本次已安装"
         ok("前端依赖安装完成。")

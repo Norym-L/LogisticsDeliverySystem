@@ -671,8 +671,19 @@ function Prepare-Frontend {
 
     $viteCmd = Join-Path $webDir 'node_modules\.bin\vite.cmd'
     $viteBin = Join-Path $webDir 'node_modules\.bin\vite'
-    if (-not (Test-Path -LiteralPath $viteCmd) -and -not (Test-Path -LiteralPath $viteBin)) {
-        Write-Info '未检测到完整前端依赖，执行 npm install（首次可能较慢）...'
+    # 除 vite 启动器外，还要确认 tysha-fonts.css 依赖的自托管字体已安装，
+    # 否则旧的 node_modules 会跳过 npm install，构建时才在 @fontsource 上报错。
+    $fontCssFiles = @(
+        'node_modules\@fontsource\inter-tight\latin-300.css',
+        'node_modules\@fontsource\instrument-serif\latin-400.css',
+        'node_modules\@fontsource\geist-mono\latin-400.css',
+        'node_modules\@fontsource\noto-sans-sc\chinese-simplified-400.css',
+        'node_modules\@fontsource\noto-serif-sc\chinese-simplified-400.css'
+    )
+    $viteMissing = (-not (Test-Path -LiteralPath $viteCmd) -and -not (Test-Path -LiteralPath $viteBin))
+    $fontsMissing = @($fontCssFiles | Where-Object { -not (Test-Path -LiteralPath (Join-Path $webDir $_)) })
+    if ($viteMissing -or $fontsMissing.Count -gt 0) {
+        Write-Info '未检测到完整前端依赖（vite 或 @fontsource 字体缺失），执行 npm install（首次可能较慢）...'
         $installCode = 1
         Push-Location -LiteralPath $webDir
         try {
@@ -684,12 +695,14 @@ function Prepare-Frontend {
         if ($installCode -ne 0) {
             Fail ('npm install 失败（退出码 ' + $installCode + '）。') '请检查网络与 npm 配置（代理/镜像），然后重新运行本脚本。'
         }
-        if (-not (Test-Path -LiteralPath $viteCmd) -and -not (Test-Path -LiteralPath $viteBin)) {
-            Fail 'npm install 完成后仍未找到 node_modules\.bin 下的 vite 启动器。' '请检查 npm 安装日志和 web/package.json。'
+        $viteMissing = (-not (Test-Path -LiteralPath $viteCmd) -and -not (Test-Path -LiteralPath $viteBin))
+        $fontsMissing = @($fontCssFiles | Where-Object { -not (Test-Path -LiteralPath (Join-Path $webDir $_)) })
+        if ($viteMissing -or $fontsMissing.Count -gt 0) {
+            Fail 'npm install 完成后仍缺少 vite 启动器或 @fontsource 字体文件。' '请检查 npm 安装日志与镜像配置；可删除 web\node_modules 后重新运行本脚本。'
         }
         Write-Ok '前端依赖安装完成。'
     } else {
-        Write-Ok '前端依赖已存在，跳过 npm install。'
+        Write-Ok '前端依赖已存在（含 @fontsource 字体），跳过 npm install。'
     }
 
     $staticDir = Join-Path $script:Root 'src/main/resources/static'
