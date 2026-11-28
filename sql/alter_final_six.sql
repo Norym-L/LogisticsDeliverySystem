@@ -62,4 +62,21 @@ ALTER TABLE delivery_order
                                                    'REJECTED', 'SENDING', 'DELIVERING',
                                                    'RECEIVED', 'REFUSED', 'CANCELLED'));
 
+-- 6. 旧版"批准即 APPROVED"的订单尚未走始发收件核价。
+--    对尚未首次发运、也还没有最终价的旧 APPROVED 单，退回待始发收件，
+--    并把旧版自动置为 ARRIVED 的始发站路段改回 PENDING，避免确认收件时状态冲突。
+UPDATE order_route r
+    JOIN delivery_order o ON o.id = r.order_id
+SET r.status             = 'PENDING',
+    r.actual_arrive_time = NULL
+WHERE o.state = 'APPROVED'
+  AND o.price_confirmed_at IS NULL
+  AND r.seq = 1
+  AND r.depart_time IS NULL;
+
+UPDATE delivery_order
+SET state = 'AWAITING_RECEIPT'
+WHERE state = 'APPROVED'
+  AND price_confirmed_at IS NULL;
+
 SELECT 'alter_final_six.sql 执行完成' AS summary;
