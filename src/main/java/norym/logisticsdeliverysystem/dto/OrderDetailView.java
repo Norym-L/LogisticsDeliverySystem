@@ -17,6 +17,8 @@ public record OrderDetailView(
         StationView fromStation,
         StationView toStation,
         StationView currentStation,
+        /** 包裹在地图上的当前位置及说明，查件页和订单详情共用 */
+        TrackPositionView currentPosition,
         /** 简易预计时效：路线每跨一站 1 日，最少 1 日；批准改路线后会变化 */
         Integer estimatedDays,
         /** 预计送达时间 = 下单时间 + estimatedDays 天（简化规则，不接外部预测） */

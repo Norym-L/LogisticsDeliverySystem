@@ -155,7 +155,26 @@ public final class FlowWorld
         station.setCode(code);
         station.setName(name);
         station.setStatus(1);
+        // 与 sql/seed.sql 一致的 WGS84 坐标，供轨迹地图相关用例断言
+        switch (code)
+        {
+            case "ST001" -> coordinates(station, "39.9068844", "116.4845489");
+            case "ST002" -> coordinates(station, "39.2077916", "117.1355758");
+            case "ST003" -> coordinates(station, "36.6641799", "117.1456723");
+            case "ST004" -> coordinates(station, "34.7221614", "113.7027748");
+            case "ST005" -> coordinates(station, "31.8711900", "118.8242900");
+            case "ST006" -> coordinates(station, "31.2067567", "121.2584826");
+            case "ST007" -> coordinates(station, "30.6394073", "114.1765693");
+            case "ST008" -> coordinates(station, "30.2815002", "120.0212235");
+            default -> throw new IllegalArgumentException("未知驿站编码：" + code);
+        }
         stations.add(station);
+    }
+
+    private void coordinates(Station station, String latitude, String longitude)
+    {
+        station.setLatitude(new BigDecimal(latitude));
+        station.setLongitude(new BigDecimal(longitude));
     }
 
     private void edge(long a, long b, String km)
@@ -228,7 +247,17 @@ public final class FlowWorld
         @Override
         public int refuse(String orderNo, String receiverPhone, String reason, LocalDateTime now)
         {
-            throw new UnsupportedOperationException();
+            DeliveryOrder order = findByOrderNo(orderNo);
+            if (order == null || order.getState() != OrderState.DELIVERING
+                    || !receiverPhone.equals(order.getReceiverPhone()))
+            {
+                return 0;
+            }
+            order.setState(OrderState.REFUSED);
+            order.setRefuseReason(reason);
+            order.setRefuseTime(now);
+            order.setVersion(order.getVersion() == null ? 1 : order.getVersion() + 1);
+            return 1;
         }
 
         @Override

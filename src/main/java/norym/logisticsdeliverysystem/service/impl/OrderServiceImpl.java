@@ -9,6 +9,7 @@ import norym.logisticsdeliverysystem.dto.OrderStatusView;
 import norym.logisticsdeliverysystem.dto.QrCodeView;
 import norym.logisticsdeliverysystem.dto.RouteNodeView;
 import norym.logisticsdeliverysystem.dto.StationView;
+import norym.logisticsdeliverysystem.dto.TrackPositionView;
 import norym.logisticsdeliverysystem.entity.DeliveryOrder;
 import norym.logisticsdeliverysystem.entity.OrderRoute;
 import norym.logisticsdeliverysystem.entity.OrderState;
@@ -133,17 +134,24 @@ public class OrderServiceImpl implements OrderService
         DeliveryOrder order = requireOrder(orderNo);
         Map<Long, Station> stations = loadStations();
 
+        List<OrderRoute> routes = routeMapper.findByOrderId(order.getId());
         List<RouteNodeView> trajectory = new ArrayList<>();
-        for (OrderRoute route : routeMapper.findByOrderId(order.getId()))
+        for (OrderRoute route : routes)
         {
+            Station station = station(stations, route.getStationId());
             trajectory.add(new RouteNodeView(
                     route.getSeq(),
-                    stationName(stations, route.getStationId()),
+                    route.getStationId(),
+                    station == null ? null : station.getName(),
                     route.getStatus() == null ? null : route.getStatus().name(),
                     route.getDepartTime(),
                     route.getActualArriveTime(),
-                    route.getArriveTripNo()));
+                    route.getArriveTripNo(),
+                    station == null ? null : station.getLatitude(),
+                    station == null ? null : station.getLongitude()));
         }
+        TrackPositionView currentPosition = TrackPositionResolver.resolve(
+                order, routes, stationId -> station(stations, stationId));
         DeliveryOrder returnOrder = orderMapper.findByReturnOf(order.getOrderNo());
         int estimatedDays = pricingService.estimateDaysForOrder(order);
         LocalDateTime estimatedDeliveryAt = order.getCreateTime() == null
@@ -158,6 +166,7 @@ public class OrderServiceImpl implements OrderService
                 toView(stations, order.getFromStationId()),
                 toView(stations, order.getToStationId()),
                 toView(stations, order.getCurrentStationId()),
+                currentPosition,
                 estimatedDays,
                 estimatedDeliveryAt,
                 order.getGoodsDesc(), order.getWeight(),
@@ -557,7 +566,11 @@ public class OrderServiceImpl implements OrderService
         return view == null ? null : view.name();
     }
 
-    private StationView toView(Map<Long, Station> stations, Long stationId)
+    /**
+     * 从已加载的启用站字典里取站；停用站不在 findAll 结果里，回查一次并缓存，
+     * 保证历史订单的站点名称和坐标仍然能显示。
+     */
+    private Station station(Map<Long, Station> stations, Long stationId)
     {
         if (stationId == null)
         {
@@ -567,9 +580,20 @@ public class OrderServiceImpl implements OrderService
         if (station == null)
         {
             station = stationMapper.findById(stationId);
+            if (station != null)
+            {
+                stations.put(stationId, station);
+            }
         }
+        return station;
+    }
+
+    private StationView toView(Map<Long, Station> stations, Long stationId)
+    {
+        Station station = station(stations, stationId);
         return station == null ? null
-                : new StationView(station.getId(), station.getCode(), station.getName(), station.getAddress());
+                : new StationView(station.getId(), station.getCode(), station.getName(), station.getAddress(),
+                station.getLatitude(), station.getLongitude());
     }
 
     private boolean isBlank(String value)

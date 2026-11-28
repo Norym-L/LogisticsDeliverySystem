@@ -154,7 +154,8 @@ public class RoutePlanner
             {
                 throw new ApiException(400, "驿站不存在：" + id);
             }
-            views.add(new StationView(station.getId(), station.getCode(), station.getName(), station.getAddress()));
+            views.add(new StationView(station.getId(), station.getCode(), station.getName(), station.getAddress(),
+                    station.getLatitude(), station.getLongitude()));
         }
         return new RoutePlanView(views, distanceOf(path));
     }

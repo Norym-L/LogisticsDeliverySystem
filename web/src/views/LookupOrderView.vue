@@ -4,6 +4,7 @@ import { http } from '@/api/client'
 import { formatTime, formatYuan, type OrderDetail } from '@/api/types'
 import EmptyState from '@/components/EmptyState.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
+import TrackMap from '@/components/TrackMap.vue'
 import Trajectory from '@/components/Trajectory.vue'
 
 const orderNo = ref('')
@@ -149,6 +150,16 @@ function open(order: OrderDetail) {
           <p v-if="detail.rejectReason" class="hint">拒绝原因：{{ detail.rejectReason }}</p>
           <p v-if="detail.returnOrderNo" class="hint">退回单号：{{ detail.returnOrderNo }}</p>
           <p v-if="detail.originalOrderNo" class="hint">这是退回单，原单号 {{ detail.originalOrderNo }}</p>
+
+          <div class="detail-block">
+            <h2>轨迹地图</h2>
+            <TrackMap
+              :nodes="detail.trajectory"
+              :position="detail.currentPosition"
+              :from-station="detail.fromStation"
+              :to-station="detail.toStation"
+            />
+          </div>
 
           <div class="detail-block">
             <h2>固化路线</h2>

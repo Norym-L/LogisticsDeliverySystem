@@ -1,6 +1,6 @@
 # 物流配送管理系统 · 接口文档
 
-> 版本：v1.2（2026-11-28）
+> 版本：v1.3（2026-11-28，新增轨迹地图）
 > 后端：Spring Boot 4.1.2 + MyBatis 4.1.0 + MySQL 8（宿主机 3308）
 
 ---
@@ -14,9 +14,10 @@
 mysql -h127.0.0.1 -P3308 -uroot -p < sql/schema.sql
 mysql -h127.0.0.1 -P3308 -uroot -p < sql/seed.sql
 
-# 已有旧库升级（按需，二者都可重复执行）
+# 已有旧库升级（按需，均可重复执行）
 mysql -h127.0.0.1 -P3308 -uroot -p < sql/alter_pricing.sql
 mysql -h127.0.0.1 -P3308 -uroot -p < sql/alter_final_six.sql
+mysql -h127.0.0.1 -P3308 -uroot -p < sql/alter_track_map.sql
 
 # 应用
 ./mvnw spring-boot:run -Dspring-boot.run.arguments=--server.port=18080
@@ -240,12 +241,17 @@ WAITING ──批准──→ AWAITING_RECEIPT ──始发站确认收件并核
 GET /api/station/list
 ```
 
-响应 `data`：包含 `station.address`，供用户端只读网点查询页展示。
+响应 `data`：包含 `station.address`，以及轨迹地图使用的 WGS84 经纬度。
+`latitude` / `longitude` 可能为 `null`（未维护坐标的历史数据），前端此时不画点。
 
 ```json
 [{ "id": 1, "code": "ST001", "name": "北京转运中心",
-   "address": "北京市朝阳区京通大道 18 号" }, ...]
+   "address": "北京市朝阳区京通大道 18 号",
+   "latitude": 39.9068844, "longitude": 116.4845489 }, ...]
 ```
+
+坐标系是 WGS84（EPSG:4326），与 Leaflet + OpenStreetMap 底图一致；不是 GCJ-02 / BD-09。
+坐标只用于地图展示，不修改 `address`，也不代表门牌级定位（8 站坐标依据见 `sql/seed.sql` 注释）。
 
 ### 5.2 发起订单
 
@@ -303,19 +309,32 @@ GET /api/user/orders/{orderNo}
 { "orderNo": "LD2026...", "state": "SENDING",
   "senderName": "张三", "senderPhone": "13700000001",
   "receiverName": "李四", "receiverPhone": "13700000002",
-  "fromStation": { "id": 1, "code": "ST001", "name": "北京转运中心", "address": "..." },
-  "toStation":   { "id": 6, "code": "ST006", "name": "上海转运中心", "address": "..." },
-  "currentStation": { "id": 5, "code": "ST005", "name": "南京转运中心", "address": "..." },
+  "fromStation": { "id": 1, "code": "ST001", "name": "北京转运中心", "address": "...",
+                   "latitude": 39.9068844, "longitude": 116.4845489 },
+  "toStation":   { "id": 6, "code": "ST006", "name": "上海转运中心", "address": "...",
+                   "latitude": 31.2067567, "longitude": 121.2584826 },
+  "currentStation": { "id": 1, "code": "ST001", "name": "北京转运中心", "address": "...",
+                      "latitude": 39.9068844, "longitude": 116.4845489 },
+  "currentPosition": {
+    "mode": "IN_TRANSIT",
+    "label": "运输中：北京转运中心 → 天津转运中心",
+    "seq": 1,
+    "stationId": 1, "stationName": "北京转运中心",
+    "latitude": 39.5573380, "longitude": 116.8100624,
+    "fromStationId": 1, "fromStationName": "北京转运中心",
+    "toStationId": 2, "toStationName": "天津转运中心"
+  },
   "estimatedDays": 4,
   "estimatedDeliveryAt": "2026-11-20T11:18:00",
   "goodsDesc": "教材", "weight": 1.5, "volumeCm3": 12000,
   "quotedPrice": 33, "price": 33, "priceConfirmed": true,
   "trajectory": [
-    { "seq": 1, "stationName": "北京转运中心", "status": "ARRIVED",
+    { "seq": 1, "stationId": 1, "stationName": "北京转运中心",
+      "latitude": 39.9068844, "longitude": 116.4845489, "status": "ARRIVED",
       "departTime": "2026-11-16T11:19:00", "arriveTime": "2026-11-16T11:18:00" },
-    { "seq": 2, "stationName": "天津转运中心", "status": "ARRIVED",
-      "departTime": "2026-11-16T11:20:00", "arriveTime": "2026-11-16T11:19:30",
-      "tripNo": "TR001" }
+    { "seq": 2, "stationId": 2, "stationName": "天津转运中心",
+      "latitude": 39.2077916, "longitude": 117.1355758, "status": "PENDING",
+      "departTime": null, "arriveTime": null, "tripNo": "TR001" }
   ],
   "events": { "createdAt": "...", "approvedAt": "...",
               "originReceivedAt": "...", "receivedAt": null,
@@ -326,8 +345,27 @@ GET /api/user/orders/{orderNo}
 - `estimatedDays`：按 2.6 的规则；批准后按固化路线计算。
 - `estimatedDeliveryAt`：下单时间 + `estimatedDays` 天。
 - `trajectory[].status`：`PENDING` / `ARRIVED` / `DELIVERING` / `SIGNED` / `REFUSED`
+- `trajectory[].stationId` / `latitude` / `longitude`：该节点驿站及 WGS84 坐标，前端据此画折线。
+- `currentPosition`：服务器按订单状态和 `order_route` 的真实到发时间算好的当前位置，
+  查件页和订单详情共用，前端不自行猜状态。可能为 `null`（无坐标的历史数据）。
 - `returnOrderNo`：该单被拒收后，指向生成的退回单。
 - `originalOrderNo`：本单若是退回单，指向原单。
+
+#### 5.4.1 当前位置模式
+
+| `mode` | 含义 | 标记位置 |
+|---|---|---|
+| `NOT_SHIPPED` | 待审批 / 已拒绝 / 已取消，尚未进入运输网 | 始发站 |
+| `AT_STATION` | 已批准待收件/待发运，或运输途中到站待发 | 当前站 |
+| `IN_TRANSIT` | 已从 `fromStation` 发运、`toStation` 尚未到货 | 两站经纬度中点 |
+| `DELIVERING` | 目的站最后一公里派送中 | 目的站 |
+| `RECEIVED` | 已签收 | 最后已知站（正常为目的站） |
+| `REFUSED` | 已拒收 | 最后已知站（正常为目的站） |
+
+判定依据是 `order_route.actual_arrive_time` / `depart_time` 与 `current_seq`：
+`current_seq` 那一站已写 `depart_time`、下一站还没写 `actual_arrive_time` 时才算 `IN_TRANSIT`；
+其余 `SENDING` 情况都落在站上。`DELIVERING` / `RECEIVED` / `REFUSED` 不会再显示为移动中。
+这是站点/路段级示意，不是车辆实时 GPS。
 
 ### 5.5 审批状态轮询
 
@@ -459,7 +497,8 @@ GET /api/admin/orders/{orderNo}/plan
 ```
 
 ```json
-{ "stations": [ { "id": 1, "code": "ST001", "name": "北京转运中心", "address": "..." }, ... ],
+{ "stations": [ { "id": 1, "code": "ST001", "name": "北京转运中心", "address": "...",
+                  "latitude": 39.9068844, "longitude": 116.4845489 }, ... ],
   "totalKm": 1377.0 }
 ```
 
@@ -727,10 +766,11 @@ POST /api/postman/orders/{orderNo}/deliver
 | `sql/seed.sql` | 8 个驿站、10 条线路、9 个操作员、16 名快递员 |
 | `sql/alter_pricing.sql` | 旧库增量补充运费字段 |
 | `sql/alter_final_six.sql` | 旧库增量补充取消/收件核价列与状态 CHECK |
-| `sql/test.sql` | 41 条断言，覆盖完整生命周期（事务内执行，结束回滚） |
+| `sql/alter_track_map.sql` | 旧库增量补充驿站 WGS84 经纬度，并写入 8 站坐标 |
+| `sql/test.sql` | 43 条断言，覆盖驿站坐标与完整生命周期（事务内执行，结束回滚） |
 
 ```bash
-mysql -h127.0.0.1 -P3308 -uroot -p < sql/test.sql   # 应输出「41 条用例全部通过」
+mysql -h127.0.0.1 -P3308 -uroot -p < sql/test.sql   # 应输出「43 条用例全部通过」
 ```
 
 ---
@@ -745,3 +785,8 @@ mysql -h127.0.0.1 -P3308 -uroot -p < sql/test.sql   # 应输出「41 条用例�
 6. 预计时效按"每跨一站 1 日"的规则估算，不是真实路由预测，也不含节假日/天气等因素。
 7. 派送失败只记录原因并回到目的站待派，不提供改址、转寄、二次上门预约等能力。
 8. 网点查询只展示站名和地址，不提供地图导航。
+9. 轨迹地图使用 OpenStreetMap 公共瓦片和 Leaflet，需要能访问 `tile.openstreetmap.org`；
+   离线/内网环境底图无法加载。生产部署请遵守 OSM 瓦片使用政策（或换自建瓦片），并保留署名。
+10. 当前位置是站点/路段级示意，不是车辆实时 GPS；在途只标在相邻两站中点。
+    8 个站中 7 个因公开门牌数据不足只能精确到道路/路口，ST008（文一西路 969 号）为门牌级，
+    依据见 `sql/seed.sql` 与 `sql/alter_track_map.sql` 注释。

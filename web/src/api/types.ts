@@ -17,6 +17,10 @@ export interface StationView {
   code: string
   name: string
   address?: string | null
+  /** WGS84 纬度，来自 station.latitude；缺失时不画点 */
+  latitude?: number | null
+  /** WGS84 经度，来自 station.longitude */
+  longitude?: number | null
 }
 
 export interface OrderBrief {
@@ -76,11 +80,31 @@ export interface PostmanInfo {
 
 export interface RouteNode {
   seq: number
+  stationId: number
   stationName: string
   status: string
   departTime: string | null
   arriveTime: string | null
   tripNo: string | null
+  /** WGS84 纬度，来自 station.latitude */
+  latitude?: number | null
+  /** WGS84 经度，来自 station.longitude */
+  longitude?: number | null
+}
+
+/** 后端算好的地图当前位置；前端只用坐标和说明，不自己推断状态。 */
+export interface TrackPosition {
+  mode: 'NOT_SHIPPED' | 'AT_STATION' | 'IN_TRANSIT' | 'DELIVERING' | 'RECEIVED' | 'REFUSED' | string
+  label: string
+  seq: number
+  stationId?: number | null
+  stationName?: string | null
+  latitude?: number | null
+  longitude?: number | null
+  fromStationId?: number | null
+  fromStationName?: string | null
+  toStationId?: number | null
+  toStationName?: string | null
 }
 
 export interface OrderDetail {
@@ -93,6 +117,8 @@ export interface OrderDetail {
   fromStation: StationView | null
   toStation: StationView | null
   currentStation: StationView | null
+  /** 包裹在地图上的当前位置；后端按状态机计算，可能为 null（历史数据无坐标时） */
+  currentPosition?: TrackPosition | null
   estimatedDays?: number | null
   estimatedDeliveryAt?: string | null
   goodsDesc: string | null

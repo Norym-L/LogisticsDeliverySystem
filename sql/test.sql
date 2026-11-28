@@ -30,6 +30,16 @@ DELIMITER ;
 
 START TRANSACTION;
 
+-- ---------- 0. 驿站坐标：轨迹地图依赖 WGS84 经纬度 ----------
+CALL assert_eq((SELECT COUNT(*) FROM station
+                WHERE code BETWEEN 'ST001' AND 'ST008'
+                  AND (latitude IS NULL OR longitude IS NULL)),
+               '0', '00 8 个转运中心均有经纬度');
+CALL assert_eq((SELECT COUNT(*) FROM station
+                WHERE code BETWEEN 'ST001' AND 'ST008'
+                  AND (latitude NOT BETWEEN -90 AND 90 OR longitude NOT BETWEEN -180 AND 180)),
+               '0', '00b 驿站经纬度在合法范围内');
+
 SET @st_from = (SELECT id FROM station WHERE code = 'ST001');
 SET @st_to   = (SELECT id FROM station WHERE code = 'ST006');
 SET @admin   = (SELECT id FROM operator WHERE username = 'admin');
@@ -308,4 +318,4 @@ CALL assert_eq((SELECT COUNT(*) FROM order_route WHERE order_id = @oid), '0', '3
 ROLLBACK;
 DROP PROCEDURE IF EXISTS assert_eq;
 
-SELECT '=== 41 条用例全部通过 ===' AS summary;
+SELECT '=== 43 条用例全部通过 ===' AS summary;

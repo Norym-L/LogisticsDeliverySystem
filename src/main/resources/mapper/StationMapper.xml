@@ -4,14 +4,14 @@
 <mapper namespace="norym.logisticsdeliverysystem.mapper.StationMapper">
 
     <select id="findAll" resultType="Station">
-        SELECT id, code, name, address, status, create_time
+        SELECT id, code, name, address, latitude, longitude, status, create_time
         FROM station
         WHERE status = 1
         ORDER BY id
     </select>
 
     <select id="findById" resultType="Station">
-        SELECT id, code, name, address, status, create_time
+        SELECT id, code, name, address, latitude, longitude, status, create_time
         FROM station
         WHERE id = #{id}
     </select>

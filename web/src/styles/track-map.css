@@ -1,0 +1,211 @@
+/* 轨迹地图（Leaflet + OpenStreetMap）。底图署名必须保留。 */
+
+.track-map {
+  position: relative;
+  isolation: isolate;
+}
+
+.track-map__canvas {
+  height: 320px;
+  border: 1px solid var(--milk-edge, #e4e4e4);
+  border-radius: 16px;
+  overflow: hidden;
+  background: #eef1f4;
+  z-index: 0;
+}
+
+.track-map .leaflet-container {
+  font-family: inherit;
+}
+
+.track-map .leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.86);
+  color: #5f5f5f;
+  font-size: 10px;
+}
+
+.track-map .leaflet-control-attribution a {
+  color: #b8172a;
+}
+
+.track-map__caption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--milk-ink, #0f0f0f);
+}
+
+.track-map__caption b {
+  font-weight: 600;
+}
+
+.track-map__caption-dot {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--track-color, #7e8388);
+  box-shadow: 0 0 0 3px rgba(15, 15, 15, 0.08);
+}
+
+.track-map + .rail {
+  margin-top: 18px;
+}
+
+.track-map__hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--milk-muted, #5f5f5f);
+}
+
+.track-map__hint a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+/* ---------- 当前位置标记 ---------- */
+.track-marker-host {
+  background: transparent;
+  border: 0;
+}
+
+.track-marker {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+.track-marker__dot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 18px;
+  height: 18px;
+  transform: translate(-50%, -50%);
+  border: 3px solid #fffdf8;
+  border-radius: 50%;
+  background: var(--track-color, #7e8388);
+  box-shadow: 0 0 0 4px rgba(15, 15, 15, 0.12), 0 3px 10px rgba(15, 15, 15, 0.28);
+}
+
+.track-marker__dot::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 2px solid var(--track-color, #7e8388);
+  animation: track-pulse 2.2s ease-out infinite;
+}
+
+.track-marker__label {
+  position: absolute;
+  left: 15px;
+  top: 0;
+  transform: translateY(-50%);
+  max-width: 260px;
+  padding: 4px 10px;
+  border: 1px solid var(--milk-edge, #e4e4e4);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.96);
+  color: var(--milk-ink, #0f0f0f);
+  box-shadow: 0 4px 14px rgba(15, 15, 15, 0.16);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.track-marker.is-label-left .track-marker__label {
+  left: auto;
+  right: 15px;
+}
+
+.track-marker.is-in-transit .track-marker__dot::after {
+  animation-duration: 1.4s;
+}
+
+.track-station-tooltip {
+  font-size: 12px;
+}
+
+/* ---------- 位置模式配色 ---------- */
+.is-not-shipped {
+  --track-color: #7e8388;
+}
+
+.is-at-station {
+  --track-color: #dc1e32;
+}
+
+.is-in-transit {
+  --track-color: #d97706;
+}
+
+.is-delivering {
+  --track-color: #2563eb;
+}
+
+.is-received {
+  --track-color: #26ab33;
+}
+
+.is-refused {
+  --track-color: #8c4141;
+}
+
+html[data-theme="dark"] .track-marker__label {
+  background: rgba(30, 34, 40, 0.94);
+  color: var(--milk-ink, #edf0f5);
+  border-color: var(--milk-edge, #3a424e);
+}
+
+html[data-theme="dark"] .track-map .leaflet-control-attribution {
+  background: rgba(20, 23, 28, 0.82);
+  color: #aab3c0;
+}
+
+html[data-theme="dark"] .track-map .leaflet-control-attribution a {
+  color: #e6a5ad;
+}
+
+@keyframes track-pulse {
+  0% {
+    transform: scale(0.65);
+    opacity: 0.55;
+  }
+  70% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track-marker__dot::after {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .track-map__canvas {
+    height: 260px;
+  }
+
+  .track-marker__label,
+  .track-marker.is-label-left .track-marker__label {
+    left: 50%;
+    right: auto;
+    top: 14px;
+    transform: translateX(-50%);
+    max-width: 180px;
+    font-size: 11px;
+  }
+}

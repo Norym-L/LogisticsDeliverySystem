@@ -44,6 +44,8 @@ CREATE TABLE station
     code        VARCHAR(16)     NOT NULL COMMENT '业务编号，如 ST001',
     name        VARCHAR(64)     NOT NULL COMMENT '驿站名称',
     address     VARCHAR(255)    NOT NULL COMMENT '地址',
+    latitude    DECIMAL(10, 7)  NULL COMMENT 'WGS84 纬度，轨迹地图用；不改变地址文本',
+    longitude   DECIMAL(10, 7)  NULL COMMENT 'WGS84 经度，轨迹地图用；与 OSM 底图一致',
     status      TINYINT         NOT NULL DEFAULT 1 COMMENT '1 启用 / 0 停用',
     create_time DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     PRIMARY KEY (id),

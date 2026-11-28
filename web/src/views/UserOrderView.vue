@@ -5,6 +5,7 @@ import { http } from '@/api/client'
 import { formatTime, formatYuan, type OrderDetail, type OrderStatus, type PriceQuote, type StationView } from '@/api/types'
 import OrderQrCode from '@/components/OrderQrCode.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
+import TrackMap from '@/components/TrackMap.vue'
 import Trajectory from '@/components/Trajectory.vue'
 
 const route = useRoute()
@@ -283,8 +284,14 @@ async function cancelOrder() {
         </p>
 
         <div class="detail-block">
-          <h2>轨迹</h2>
-          <p v-if="detail.trajectory.length === 0" class="hint">审批通过后才会生成路线。</p>
+          <h2>轨迹地图</h2>
+          <TrackMap
+            :nodes="detail.trajectory"
+            :position="detail.currentPosition"
+            :from-station="detail.fromStation"
+            :to-station="detail.toStation"
+          />
+          <p v-if="detail.trajectory.length === 0" class="hint">审批通过后才会生成途经站，当前仅显示起止站。</p>
           <Trajectory v-else :nodes="detail.trajectory" />
         </div>
 
